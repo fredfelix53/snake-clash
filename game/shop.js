@@ -118,8 +118,8 @@
   function renderUpgrades(targetContainer) {
     const list = targetContainer || document.getElementById('upgrade-list');
     if (!list) return;
-    // Only clear if not already cleared by renderTabContent
-    if (!targetContainer) list.innerHTML = '';
+    // Clear container (renderTabContent already cleared content for shop, but standalone upgrades screen needs clearing too)
+    list.innerHTML = '';
     const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : {};
 
     for (const item of UPGRADE_ITEMS) {
