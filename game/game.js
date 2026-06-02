@@ -1,6 +1,41 @@
-/* ===== Snake Clash! — Game Engine ===== */
+/* ===== Snake Clash! — Game Engine (v2 Full-Screen) ===== */
 (function() {
   'use strict';
+
+  // --- Screen Navigation System ---
+  window.showScreen = function(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id)?.classList.add('active');
+
+    // Update shop/upgrade coins when navigating
+    if (id === 'screen-shop') {
+      const sc = document.getElementById('shop-coins');
+      if (sc) {
+        const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
+        sc.textContent = state ? state.coins : coins;
+      }
+    }
+    if (id === 'screen-upgrades') {
+      const uc = document.getElementById('upgrade-coins');
+      if (uc) {
+        const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
+        uc.textContent = state ? state.coins : coins;
+      }
+    }
+  };
+
+  window.hideGameOver = function() {
+    goOverlay.classList.remove('visible');
+  };
+
+  // --- Screen shake ---
+  window.screenShake = function() {
+    const app = document.getElementById('app');
+    app.classList.remove('screen-shake');
+    void app.offsetWidth;
+    app.classList.add('screen-shake');
+    setTimeout(() => app.classList.remove('screen-shake'), 300);
+  };
 
   // --- Load Progression System ---
   if (typeof ProgressionSystem !== 'undefined') {
@@ -9,7 +44,7 @@
 
   // --- Constants ---
   const GRID_SIZE = 10;            // 10x10 grid
-  const CANVAS_SIZE = 320;
+  const CANVAS_SIZE = 320;         // logical size
   const CELL_SIZE = CANVAS_SIZE / GRID_SIZE;
   const SAVE_KEY = 'snake_clash_save';
   const DAILY_SEED_KEY = 'snake_clash_daily_seed';
@@ -20,7 +55,7 @@
     3500, 5000, 7000, 10000, 15000
   ];
 
-  // Base speed (ms per tick) per level — SLOWER pace
+  // Base speed (ms per tick) per level
   const BASE_INTERVALS = [350, 310, 280, 250, 220, 190, 165, 140, 120, 100, 85, 70, 58, 48, 40];
 
   // Food types
@@ -43,14 +78,14 @@
   const COST_SHIELD = 8;
   const COST_MAGNET = 12;
 
-  // --- DOM refs ---
+  // --- DOM refs (new game screen) ---
   const canvas = document.getElementById('board');
   const ctx = canvas.getContext('2d');
 
-  const scoreEl = document.getElementById('score');
-  const highscoreEl = document.getElementById('highscore');
-  const levelEl = document.getElementById('level');
-  const coinsEl = document.getElementById('coins');
+  const scoreEl = document.getElementById('game-score');
+  const highscoreEl = document.getElementById('game-best');
+  const levelEl = document.getElementById('game-level');
+  const coinsEl = document.getElementById('game-coins');
   const comboDisplay = document.getElementById('combo-display');
   const comboCount = document.getElementById('combo-count');
   const countdownOverlay = document.getElementById('countdown-overlay');
@@ -60,7 +95,6 @@
   const goOverlay = document.getElementById('game-over');
   const goTitle = document.getElementById('go-title');
   const goScore = document.getElementById('go-score');
-  const goDetail = document.getElementById('go-detail');
   const goCoins = document.getElementById('go-coins');
   const goDouble = document.getElementById('go-double');
   const goRestart = document.getElementById('go-restart');
@@ -68,55 +102,57 @@
   const btnDaily = document.getElementById('btn-daily');
   const btnClassic = document.getElementById('btn-classic');
   const btnRestart = document.getElementById('btn-restart');
-  const btnShop = document.getElementById('btn-shop');
   const btnSpeed = document.getElementById('pu-speed');
   const btnShield = document.getElementById('pu-shield');
   const btnMagnet = document.getElementById('pu-magnet');
-  const btnRewardDouble = document.getElementById('btn-reward-double');
 
-  // HUD elements
-  const hudLevel = document.getElementById('hud-level');
-  const hudCoins = document.getElementById('hud-coins');
-  const hudGems = document.getElementById('hud-gems');
+  // --- Canvas auto-sizing ---
+  function sizeCanvas() {
+    const container = document.getElementById('board-container');
+    if (!container) return;
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    const size = Math.min(w, h);
+    canvas.width = CANVAS_SIZE;
+    canvas.height = CANVAS_SIZE;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+  }
 
-  // Particle system
+  // --- Particle system ---
   let particles = null;
 
   // --- Game state ---
-  let snake = [];           // array of {x, y}
+  let snake = [];
   let direction = DIR.RIGHT;
   let nextDirection = DIR.RIGHT;
-  let food = null;           // { x, y, type }
-  let grid = [];             // 2D array: 0=empty, 1=snake, 2=food
+  let food = null;
+  let grid = [];
   let score = 0;
   let coins = 0;
   let level = 1;
   let combo = 0;
-  let foodEaten = 0;        // total food eaten this game
-  let mode = 'daily';       // 'daily' or 'classic'
+  let foodEaten = 0;
+  let mode = 'daily';
   let running = false;
   let gameLoop = null;
-  let rng = null;            // seeded RNG for daily mode
+  let rng = null;
   let shieldActive = false;
   let speedActive = false;
   let magnetActive = false;
-  let pendingRemoval = [];   // cells to remove (for poison)
+  let pendingRemoval = [];
   let dailySeed = 0;
-  let scoreMult = 1;         // from progression bonuses
-  let foodBonus = 0;         // bonus points per food
-  let comboBonus = 0;        // bonus points per combo level
-  let scorePerFood = 0;      // flat bonus per food eaten
-  let magnetRangeExtra = 0;  // extra magnet range
+  let scoreMult = 1;
+  let foodBonus = 0;
+  let comboBonus = 0;
+  let scorePerFood = 0;
+  let magnetRangeExtra = 0;
 
-  // Power-ups purchased before round
   let purchasedSpeed = false;
   let purchasedShield = false;
   let purchasedMagnet = false;
 
-  // High scores per mode
   let highScores = { daily: 0, classic: 0 };
-
-  // Ad integration
   let adPendingCallback = null;
   const hasNativeAds = typeof window.AndroidAds !== 'undefined';
 
@@ -124,7 +160,7 @@
     if (adPendingCallback) { adPendingCallback(); adPendingCallback = null; }
   };
 
-  // --- Seeded random (mulberry32) ---
+  // --- Seeded random ---
   function mulberry32(a) {
     return function() {
       a |= 0; a = a + 0x6D2B79F5 | 0;
@@ -134,7 +170,6 @@
     };
   }
 
-  // --- Utility ---
   function computeDailySeed() {
     const d = new Date();
     return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
@@ -157,7 +192,6 @@
     return interval;
   }
 
-  // Load progression bonuses
   function loadBonuses() {
     if (typeof ProgressionSystem === 'undefined') {
       scoreMult = 1;
@@ -203,15 +237,13 @@
     if (emptyCells.length === 0) return false;
 
     const cell = emptyCells[rand(0, emptyCells.length - 1)];
-
-    // Determine type
     const roll = rand(1, 100);
     let type;
-    if (roll <= 10) {       // 10% gold
+    if (roll <= 10) {
       type = 'GOLD';
-    } else if (roll <= 20) { // 10% poison
+    } else if (roll <= 20) {
       type = 'POISON';
-    } else {                 // 80% regular
+    } else {
       type = 'REGULAR';
     }
 
@@ -240,9 +272,7 @@
       y: head.y + direction.y
     };
 
-    // --- Collision check ---
     let willCollide = false;
-    let collisionReason = '';
 
     // Wall collision
     if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
@@ -253,7 +283,7 @@
         shieldActive = false;
       } else {
         willCollide = true;
-        collisionReason = 'wall';
+        screenShake();
       }
     }
 
@@ -267,7 +297,7 @@
             break;
           }
           willCollide = true;
-          collisionReason = 'self';
+          screenShake();
           break;
         }
       }
@@ -278,12 +308,11 @@
       return;
     }
 
-    // --- Magnet effect: attract food ---
+    // Magnet effect
     if (magnetActive && food) {
       const magnetRange = 3 + magnetRangeExtra;
       const dist = Math.abs(newHead.x - food.x) + Math.abs(newHead.y - food.y);
       if (dist > 0 && dist <= magnetRange) {
-        // Move food closer to head
         const dx = Math.sign(food.x - newHead.x);
         const dy = Math.sign(food.y - newHead.y);
         const newFX = food.x - dx;
@@ -295,25 +324,18 @@
       }
     }
 
-    // --- Move ---
     snake.unshift(newHead);
 
-    // Check food
     let ate = false;
     if (food && newHead.x === food.x && newHead.y === food.y) {
       ate = true;
       const type = food.type;
       foodEaten++;
-      const ftype = type;
       food = null;
 
-      // Calculate base points with multiplier
       let basePoints = type.points * (type === FOOD.POISON ? 1 : scoreMult);
-
-      // Add food bonus (permanent upgrade)
       let totalPoints = basePoints + (type === FOOD.POISON ? 0 : (foodBonus + scorePerFood));
 
-      // Apply food effect
       if (type === FOOD.REGULAR) {
         const comboAdd = 1 + comboBonus / 10;
         combo += Math.round(comboAdd);
@@ -325,7 +347,6 @@
         score += Math.round(totalPoints);
         showCombo();
         showToast('⭐ Gold! +' + Math.round(totalPoints) + ' points!');
-        // Emit particles
         if (particles) {
           particles.emitReward(newHead.x * CELL_SIZE + CELL_SIZE / 2, newHead.y * CELL_SIZE + CELL_SIZE / 2);
         }
@@ -353,15 +374,11 @@
         coins += coinGain;
       }
 
-      // Emit particles for regular food
       if (particles && type !== FOOD.POISON) {
         particles.emit(newHead.x * CELL_SIZE + CELL_SIZE / 2, newHead.y * CELL_SIZE + CELL_SIZE / 2, type.color, 5);
       }
 
-      // Level check
       checkLevelUp();
-
-      // Spawn new food
       updateGrid();
       if (!spawnFood()) {
         endGame(true);
@@ -381,7 +398,7 @@
     const target = LEVEL_TARGETS[idx];
     if (score >= target && level < LEVEL_TARGETS.length) {
       level++;
-      showToast('⬆ Level ' + level + '! Speed up!');
+      showToast('⬆ Level ' + level + '!');
       if (particles) particles.emitLevelUp();
       resetLoop();
     }
@@ -401,11 +418,11 @@
   function draw() {
     ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-    // --- Grid background ---
+    // Grid background
     ctx.fillStyle = '#0a0a1a';
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-    // Grid lines (neon)
+    // Grid lines
     ctx.strokeStyle = 'rgba(10, 255, 157, 0.06)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= GRID_SIZE; i++) {
@@ -420,18 +437,16 @@
       ctx.stroke();
     }
 
-    // --- Draw food using gradient if available ---
+    // Draw food
     if (food) {
       const fx = food.x * CELL_SIZE;
       const fy = food.y * CELL_SIZE;
       const pad = 2;
 
       if (typeof drawGradientBlock !== 'undefined') {
-        // Use the generic gradient block renderer
         const type = food.type === FOOD.GOLD ? 'O' : food.type === FOOD.POISON ? 'Z' : 'S';
         drawGradientBlock(ctx, fx, fy, CELL_SIZE, type, true, null);
       } else {
-        // Fallback
         if (food.type === FOOD.GOLD) {
           ctx.shadowColor = '#f5c518';
           ctx.shadowBlur = 15;
@@ -448,7 +463,6 @@
         ctx.fill();
       }
 
-      // Food icon always drawn on top
       ctx.shadowBlur = 0;
       ctx.font = (CELL_SIZE * 0.6) + 'px sans-serif';
       ctx.textAlign = 'center';
@@ -456,7 +470,7 @@
       ctx.fillText(food.type.char, fx + CELL_SIZE / 2, fy + CELL_SIZE / 2);
     }
 
-    // --- Draw snake ---
+    // Draw snake
     for (let i = 0; i < snake.length; i++) {
       const seg = snake[i];
       const sx = seg.x * CELL_SIZE;
@@ -465,7 +479,6 @@
       const size = CELL_SIZE - pad * 2;
       const color = getSnakeColor(i);
 
-      // Glow for head
       if (i === 0) {
         ctx.shadowColor = color;
         ctx.shadowBlur = 12;
@@ -474,7 +487,6 @@
         ctx.shadowColor = color;
       }
 
-      // Rounded rect
       const radius = 4;
       ctx.fillStyle = color;
       ctx.beginPath();
@@ -524,13 +536,13 @@
       }
     }
 
-    // Draw particles
+    // Particles
     if (particles) {
       particles.update();
       particles.draw(ctx);
     }
 
-    // --- Shield indicator ---
+    // Shield indicator
     if (shieldActive) {
       ctx.strokeStyle = 'rgba(10, 255, 157, 0.4)';
       ctx.lineWidth = 3;
@@ -539,7 +551,7 @@
       ctx.setLineDash([]);
     }
 
-    // --- Magnet indicator ---
+    // Magnet indicator
     if (magnetActive && food) {
       const fx = food.x * CELL_SIZE + CELL_SIZE / 2;
       const fy = food.y * CELL_SIZE + CELL_SIZE / 2;
@@ -552,17 +564,15 @@
     }
   }
 
-  // --- Combo display ---
+  // --- Combo ---
   function showCombo() {
     if (combo < 2) return;
     comboCount.textContent = combo;
     comboDisplay.classList.remove('hidden');
     comboDisplay.style.animation = 'none';
     comboDisplay.offsetHeight;
-    comboDisplay.style.animation = 'combo-pop 0.6s ease-out forwards';
-    setTimeout(() => {
-      comboDisplay.classList.add('hidden');
-    }, 600);
+    comboDisplay.style.animation = 'comboPop 0.6s ease-out forwards';
+    setTimeout(() => comboDisplay.classList.add('hidden'), 600);
   }
 
   // --- Toast ---
@@ -571,9 +581,7 @@
     toast.textContent = msg;
     toast.classList.remove('hidden');
     clearTimeout(toast._timeout);
-    toast._timeout = setTimeout(() => {
-      toast.classList.add('hidden');
-    }, duration);
+    toast._timeout = setTimeout(() => toast.classList.add('hidden'), duration);
   }
 
   // --- Achievement popup ---
@@ -598,7 +606,7 @@
 
   // --- Countdown ---
   function showCountdown(callback) {
-    countdownOverlay.classList.remove('hidden');
+    countdownOverlay.classList.add('visible');
     let count = 3;
     countdownText.textContent = count;
     const interval = setInterval(() => {
@@ -607,7 +615,7 @@
         countdownText.textContent = count;
       } else {
         clearInterval(interval);
-        countdownOverlay.classList.add('hidden');
+        countdownOverlay.classList.remove('visible');
         if (callback) callback();
       }
     }, 800);
@@ -630,24 +638,23 @@
     updateUI();
   }
 
-  // --- Start game ---
-  function startGame() {
+  // --- Start game (called from PLAY button or auto) ---
+  window.startGame = function() {
+    if (!running) {
+      // Initialize fresh game
+      newGame(mode || 'daily');
+    }
+    // If already initialized, just ensure game is running
     running = true;
     combo = 0;
-
-    // Apply progression bonuses
     loadBonuses();
 
-    // Shield chance from progression
     const bonuses = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getActiveBonuses() : null;
     const shieldChance = bonuses ? bonuses.shieldChance : 0;
 
     shieldActive = purchasedShield || (shieldChance > 0 && Math.random() < shieldChance);
     speedActive = purchasedSpeed;
     magnetActive = purchasedMagnet;
-
-    // Start food bonus
-    const startFoodBonus = bonuses ? bonuses.startFood : 0;
 
     purchasedSpeed = false;
     purchasedShield = false;
@@ -657,29 +664,13 @@
     updatePowerUps();
     updateRewardButtons();
 
-    // Initialize particles
     if (typeof ParticleSystem !== 'undefined' && !particles) {
       particles = new ParticleSystem();
     }
 
-    // If we have start food bonus, spawn extra gold food
+    sizeCanvas();
     updateGrid();
-    spawnFood();
-    for (let i = 0; i < startFoodBonus; i++) {
-      // Try to spawn additional gold food
-      const emptyCells = [];
-      for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-          if (grid[y][x] === 0) emptyCells.push({ x, y });
-        }
-      }
-      if (emptyCells.length > 0) {
-        const cell = emptyCells[rand(0, emptyCells.length - 1)];
-        // We just mark this - the game already has a food, so this is extra
-        // Actually, let's just spawn regular food positions in the grid that give bonus
-        // Instead, let's just mark bonus points for the first food eaten
-      }
-    }
+    if (!food) spawnFood();
 
     showCountdown(() => {
       updateGrid();
@@ -688,7 +679,7 @@
       draw();
       updateUI();
     });
-  }
+  };
 
   // --- New game ---
   function newGame(m) {
@@ -713,7 +704,7 @@
     purchasedShield = false;
     purchasedMagnet = false;
 
-    goOverlay.classList.add('hidden');
+    goOverlay.classList.remove('visible');
 
     dailySeed = computeDailySeed();
     rng = mode === 'daily' ? mulberry32(dailySeed) : null;
@@ -721,15 +712,13 @@
     initSnake();
     updateGrid();
 
-    // Update UI
     btnDaily.classList.toggle('active', mode === 'daily');
     btnClassic.classList.toggle('active', mode === 'classic');
     updateUI();
     updatePowerUps();
     updateRewardButtons();
+    sizeCanvas();
     draw();
-
-    setTimeout(startGame, 300);
   }
 
   // --- End game ---
@@ -741,28 +730,24 @@
       gameLoop = null;
     }
 
-    // Update high score
     if (score > highScores[mode]) {
       highScores[mode] = score;
       saveGame();
     }
 
-    // Notify progression system
     if (typeof ProgressionSystem !== 'undefined') {
       ProgressionSystem.endOfGame({
         score: score,
         foodEaten: foodEaten,
         bestCombo: combo
       });
-
-      // Check achievements
       const newAchs = ProgressionSystem.checkAchievements();
       for (const ach of newAchs) {
         showAchievementPopup(ach);
       }
     }
 
-    // ─── Framework module hooks ────────────────
+    // Framework hooks
     if (window.RetentionSystem) {
       RetentionSystem.onGameEnd(score);
       RetentionSystem.submitScore('Player', score);
@@ -778,28 +763,19 @@
     if (window.AdsManager) {
       setTimeout(() => AdsManager.tryShowInterstitial(), 2000);
     }
-    // ────────────────────────────────────────────
 
-    // Show overlay
-    if (won) {
-      goTitle.textContent = '🎉 You Win!';
-      goTitle.style.color = '#0aff9d';
-    } else {
-      goTitle.textContent = '💀 Game Over';
-      goTitle.style.color = '#e94560';
-    }
-
+    goTitle.textContent = won ? '🎉 You Win!' : '💀 Game Over';
+    goTitle.className = won ? 'go-win' : 'go-lose';
     goScore.textContent = score;
-    goDetail.textContent = 'Level ' + level + ' · Best ' + highScores[mode];
     goCoins.textContent = '🪙 +' + coins + ' coins';
 
     goDouble.disabled = coins <= 0;
-    goOverlay.classList.remove('hidden');
+    goOverlay.classList.add('visible');
     saveGame();
     updateUI();
   }
 
-  // --- Direction change ---
+  // --- Direction ---
   function setDirection(newDir) {
     if (!running) return;
     if (direction.x === -newDir.x && direction.y === -newDir.y) return;
@@ -807,7 +783,7 @@
     swipeHint.textContent = '';
   }
 
-  // --- Swipe handling ---
+  // --- Swipe ---
   let touchStartX = 0, touchStartY = 0;
   let isSwiping = false;
 
@@ -828,7 +804,6 @@
     const absDy = Math.abs(dy);
 
     if (Math.max(absDx, absDy) < 20) return;
-
     if (absDx > absDy) {
       setDirection(dx > 0 ? DIR.RIGHT : DIR.LEFT);
     } else {
@@ -836,7 +811,7 @@
     }
   }
 
-  // --- Keyboard controls ---
+  // --- Keyboard ---
   function handleKey(e) {
     switch (e.key) {
       case 'ArrowUp': e.preventDefault(); setDirection(DIR.UP); break;
@@ -888,12 +863,10 @@
   // --- Ad ---
   function showAd(callback) {
     adPendingCallback = callback;
-
     if (hasNativeAds) {
       window.AndroidAds.showRewarded();
       return;
     }
-
     const adOverlay = document.createElement('div');
     adOverlay.id = 'ad-overlay';
     adOverlay.innerHTML = `
@@ -901,8 +874,7 @@
         <div style="font-size:48px;margin-bottom:20px;">📺</div>
         <div style="font-size:24px;color:#fff;font-weight:600;">Watching ad...</div>
         <div style="font-size:14px;color:#888;margin-top:8px;" id="ad-timer">3</div>
-      </div>
-    `;
+      </div>`;
     document.body.appendChild(adOverlay);
 
     let count = 3;
@@ -930,7 +902,9 @@
   }
 
   function updateRewardButtons() {
-    btnRewardDouble.disabled = coins < 1 || !running;
+    if (typeof goDouble !== 'undefined' && goDouble) {
+      goDouble.disabled = coins < 1;
+    }
   }
 
   // --- Save/Load ---
@@ -965,68 +939,67 @@
     highscoreEl.textContent = highScores[mode] || 0;
     levelEl.textContent = level;
     coinsEl.textContent = coins;
-
-    // Update HUD
-    if (hudLevel) {
-      const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
-      hudLevel.textContent = state ? state.level : level;
-    }
-    if (hudCoins) {
-      const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
-      hudCoins.textContent = state ? state.coins : coins;
-    }
-    if (hudGems) {
-      const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
-      hudGems.textContent = state ? state.gems : 0;
-    }
   }
 
-  // --- Event listeners ---
-  canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
-  canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
-  document.addEventListener('keydown', handleKey);
+  // --- Event setup ---
+  function setupEvents() {
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: true });
+    document.addEventListener('keydown', handleKey);
 
-  btnDaily.addEventListener('click', () => newGame('daily'));
-  btnClassic.addEventListener('click', () => newGame('classic'));
-  btnRestart.addEventListener('click', () => newGame(mode));
-  btnSpeed.addEventListener('click', buySpeed);
-  btnShield.addEventListener('click', buyShield);
-  btnMagnet.addEventListener('click', buyMagnet);
-
-  if (btnShop) {
-    btnShop.addEventListener('click', function() {
-      if (typeof ShopUI !== 'undefined') {
-        ShopUI.open();
-      }
+    // Mode buttons
+    if (btnDaily) btnDaily.addEventListener('click', () => {
+      if (!running) { newGame('daily'); startGame(); }
     });
+    if (btnClassic) btnClassic.addEventListener('click', () => {
+      if (!running) { newGame('classic'); startGame(); }
+    });
+    if (btnRestart) btnRestart.addEventListener('click', () => {
+      newGame(mode);
+      startGame();
+    });
+
+    // Power-ups
+    if (btnSpeed) btnSpeed.addEventListener('click', buySpeed);
+    if (btnShield) btnShield.addEventListener('click', buyShield);
+    if (btnMagnet) btnMagnet.addEventListener('click', buyMagnet);
+
+    // Game over
+    if (goRestart) goRestart.addEventListener('click', () => {
+      newGame(mode);
+      startGame();
+    });
+    if (goDouble) goDouble.addEventListener('click', doubleCoins);
+
+    // Settings toggles
+    setupToggles();
+
+    // Resize canvas
+    window.addEventListener('resize', sizeCanvas);
+    window.addEventListener('orientationchange', () => setTimeout(sizeCanvas, 300));
   }
 
-  goRestart.addEventListener('click', () => newGame(mode));
-  goDouble.addEventListener('click', doubleCoins);
+  function setupToggles() {
+    const soundToggle = document.getElementById('toggle-sound');
+    const musicToggle = document.getElementById('toggle-music');
+    const vibrateToggle = document.getElementById('toggle-vibrate');
 
-  btnRewardDouble.addEventListener('click', function() {
-    showAd(function() {
-      const gain = Math.floor(Math.random() * 5) + 2;
-      coins += gain;
-      showToast('🪙 +' + gain + ' coins from ad!');
-      updateUI();
-      updatePowerUps();
-      updateRewardButtons();
+    [soundToggle, musicToggle, vibrateToggle].forEach(t => {
+      if (!t) return;
+      t.addEventListener('click', () => {
+        t.classList.toggle('active');
+      });
     });
-  });
+  }
 
   // --- Init ---
   loadGame();
 
-  // Sync progression coins if needed
   if (typeof ProgressionSystem !== 'undefined') {
     const state = ProgressionSystem.getState();
-    if (state && state.coins > 0) {
-      // Keep existing coins as-is, progression manages its own coins
-    }
   }
 
-  // ─── NEW: Initialize Framework Modules ─────────
+  // Initialize framework modules
   if (window.StoreRotator) StoreRotator.init();
   if (window.RetentionSystem) RetentionSystem.init();
   if (window.AdsManager) AdsManager.init();
@@ -1034,10 +1007,20 @@
   if (window.CollectiblesSystem) CollectiblesSystem.init();
   if (window.TutorialSystem) {
     TutorialSystem.init();
-    if(TutorialSystem.shouldShow()) setTimeout(()=>TutorialSystem.start(), 500);
+    if (TutorialSystem.shouldShow()) setTimeout(() => TutorialSystem.start(), 500);
   }
-  // ─────────────────────────────────────────────────
+
+  // Initialize game state
+  newGame('daily');
+
+  // Setup events
+  setupEvents();
+
+  // Size canvas
+  setTimeout(sizeCanvas, 100);
+
+  // Show main menu by default (PLAY button will start the game)
+  showScreen('screen-menu');
 
   updateUI();
-  newGame('daily');
 })();
