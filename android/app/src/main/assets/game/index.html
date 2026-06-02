@@ -2,135 +2,178 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-  <meta name="theme-color" content="#1a1a2e">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Snake Clash</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Fixed HUD Bar -->
-  <div id="hud-bar">
-    <div class="hud-left">
-      <span class="hud-title">🐍 SNAKE CLASH</span>
-    </div>
-    <div class="hud-right">
-      <span class="hud-item" id="hud-lvl">
-        <span class="lvl-icon">🎮</span>
-        <span id="hud-level">1</span>
-      </span>
-      <span class="hud-item" onclick="if(window.ShopUI) ShopUI.open()">
-        <span class="coin-icon">🪙</span>
-        <span id="hud-coins">0</span>
-      </span>
-      <span class="hud-item" onclick="if(window.ShopUI) ShopUI.open()">
-        <span class="gem-icon">💎</span>
-        <span id="hud-gems">0</span>
-      </span>
-      <span class="hud-item hud-btn" id="btn-challenges" onclick="if(window.ChallengesSystem)ChallengesSystem.showChallengesModal()" title="Daily Challenges">📋</span>
-      <span class="hud-item hud-btn" id="btn-leaderboard" onclick="if(window.RetentionSystem)RetentionSystem.showLeaderboardModal()" title="Leaderboard">🏆</span>
-      <span class="hud-item hud-btn" id="btn-collectibles" onclick="if(window.CollectiblesSystem)CollectiblesSystem.showCollectiblesModal()" title="Collectibles">🏅</span>
-      <span class="hud-item hud-btn" id="btn-daily" onclick="if(window.RetentionSystem)RetentionSystem.showLoginRewardsModal()" title="Daily Login">📅</span>
-      <span class="hud-item hud-btn" id="btn-ad-reward" onclick="if(window.AdsManager)AdsManager.extraCoins()" title="Watch ad for coins">📺</span>
-    </div>
-  </div>
-
   <div id="app">
-    <!-- Header -->
-    <header>
-      <div class="header-info">
-        <div class="score-box">
-          <span class="label">SCORE</span>
-          <span id="score">0</span>
-        </div>
-        <div class="high-box">
-          <span class="label">BEST</span>
-          <span id="highscore">0</span>
-        </div>
-        <div class="level-box">
-          <span class="label">LEVEL</span>
-          <span id="level">1</span>
-        </div>
-        <div class="coin-box">
-          <span class="label">🪙</span>
-          <span id="coins">0</span>
-        </div>
-      </div>
-    </header>
 
-    <!-- Game mode toggle -->
-    <div id="mode-bar">
-      <button id="btn-daily" class="mode-btn active">Daily</button>
-      <button id="btn-classic" class="mode-btn">Classic</button>
-      <button id="btn-restart" class="mode-btn danger">↻</button>
-      <button id="btn-shop" class="mode-btn" style="color:#ffd700;border-color:rgba(255,215,0,0.3);background:rgba(30,50,20,0.6);">🛒</button>
-    </div>
+    <!-- ==================== MAIN MENU ==================== -->
+    <div id="screen-menu" class="screen active">
+      <div class="menu-snake-icon">🐍</div>
+      <div class="menu-logo">SNAKE CLASH</div>
+      <div class="menu-subtitle">Eat. Grow. Conquer.</div>
 
-    <!-- Power-up bar (before round) -->
-    <div id="powerup-bar">
-      <button class="pu-btn" id="pu-speed" disabled>
-        <span class="pu-icon">⚡</span>
-        <span class="pu-label">Speed</span>
-        <span class="pu-cost">🪙5</span>
+      <button class="menu-btn menu-btn-primary" id="btn-play" onclick="showScreen('screen-game'); startGame();">
+        <span class="btn-icon">▶</span> PLAY
       </button>
-      <button class="pu-btn" id="pu-shield" disabled>
-        <span class="pu-icon">🛡️</span>
-        <span class="pu-label">Shield</span>
-        <span class="pu-cost">🪙8</span>
-      </button>
-      <button class="pu-btn" id="pu-magnet" disabled>
-        <span class="pu-icon">🧲</span>
-        <span class="pu-label">Magnet</span>
-        <span class="pu-cost">🪙12</span>
-      </button>
-    </div>
 
-    <!-- Game board -->
-    <div id="board-container">
-      <canvas id="board" width="320" height="320"></canvas>
-      <div id="countdown-overlay" class="hidden">
-        <span id="countdown-text">3</span>
-      </div>
-    </div>
-
-    <!-- Swipe hint -->
-    <div id="swipe-hint">Swipe to move</div>
-
-    <!-- Combo display -->
-    <div id="combo-display" class="hidden">🔥 x<span id="combo-count">1</span></div>
-
-    <!-- Message toast -->
-    <div id="toast" class="hidden"></div>
-
-    <!-- Banner ad placeholder -->
-    <div id="ad-banner">
-      <span class="ad-text">[ Ad Space ]</span>
-    </div>
-
-    <!-- Rewarded ad section -->
-    <div id="reward-section">
-      <button id="btn-reward-double" class="reward-btn" disabled>
-        📺 Watch ad to double coins
-      </button>
-    </div>
-  </div>
-
-  <!-- Game Over overlay -->
-  <div id="game-over" class="hidden">
-    <div class="go-modal">
-      <h2 id="go-title">💀 Game Over</h2>
-      <div class="go-score-label">Score</div>
-      <div class="go-score" id="go-score">0</div>
-      <div class="go-detail" id="go-detail"></div>
-      <div class="go-coins" id="go-coins">🪙 +0 coins</div>
-      <div class="go-btns">
-        <button class="go-reward" id="go-double" disabled>
-          📺 Double coins
+      <div class="menu-btn-row">
+        <button class="menu-btn menu-btn-small" onclick="showScreen('screen-shop')">
+          <span class="btn-icon">🛒</span> Shop
         </button>
-        <button class="go-next" id="go-restart">
-          Play Again
+        <button class="menu-btn menu-btn-small" onclick="showScreen('screen-upgrades')">
+          <span class="btn-icon">⚡</span> Upgrades
+        </button>
+        <button class="menu-btn menu-btn-small" onclick="showScreen('screen-settings')">
+          <span class="btn-icon">⚙️</span> Settings
         </button>
       </div>
     </div>
+
+    <!-- ==================== GAMEPLAY ==================== -->
+    <div id="screen-game" class="screen">
+      <!-- Top Bar -->
+      <div class="game-topbar">
+        <button class="topbar-btn" onclick="showScreen('screen-menu')" title="Menu">✕</button>
+        <div class="topbar-item">
+          <span class="topbar-label">Level</span>
+          <span class="topbar-value level" id="game-level">1</span>
+        </div>
+        <div class="topbar-item">
+          <span class="topbar-label">Score</span>
+          <span class="topbar-value" id="game-score">0</span>
+        </div>
+        <div class="topbar-item">
+          <span class="topbar-label">Best</span>
+          <span class="topbar-value" id="game-best">0</span>
+        </div>
+        <div class="topbar-item">
+          <span class="topbar-label">Coins</span>
+          <span class="topbar-value coins" id="game-coins">0</span>
+        </div>
+      </div>
+
+      <!-- Game Area -->
+      <div class="game-area">
+        <div id="board-container">
+          <canvas id="board"></canvas>
+          <div id="combo-display" class="hidden">🔥 x<span id="combo-count">1</span></div>
+          <div id="toast" class="hidden"></div>
+          <div id="countdown-overlay" class="hidden">
+            <span id="countdown-text">3</span>
+          </div>
+          <div id="swipe-hint">Swipe to move</div>
+        </div>
+      </div>
+
+      <!-- Bottom Bar -->
+      <div class="game-bottombar">
+        <button class="mode-btn active" id="btn-daily">Daily</button>
+        <button class="mode-btn" id="btn-classic">Classic</button>
+        <button class="mode-btn" id="btn-restart">↻</button>
+        <div style="flex:1"></div>
+        <button class="powerup-btn" id="pu-speed" disabled>
+          <span class="pu-icon">⚡</span>
+          <span class="pu-label">Speed</span>
+          <span class="pu-cost">🪙5</span>
+        </button>
+        <button class="powerup-btn" id="pu-shield" disabled>
+          <span class="pu-icon">🛡️</span>
+          <span class="pu-label">Shield</span>
+          <span class="pu-cost">🪙8</span>
+        </button>
+        <button class="powerup-btn" id="pu-magnet" disabled>
+          <span class="pu-icon">🧲</span>
+          <span class="pu-label">Magnet</span>
+          <span class="pu-cost">🪙12</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ==================== SHOP ==================== -->
+    <div id="screen-shop" class="screen hidden">
+      <div class="shop-header">
+        <button class="back-btn" onclick="showScreen('screen-menu')">←</button>
+        <h2>🛒 Shop</h2>
+        <span class="shop-currency">🪙 <span id="shop-coins">0</span> 💎 <span id="shop-gems">0</span></span>
+      </div>
+      <div class="shop-tabs" style="display:flex;gap:6px;padding:4px 16px;width:100%;flex-shrink:0;">
+        <button class="shop-tab" data-tab="upgrades" style="flex:1;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:var(--bg-glass);color:var(--text-secondary);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;">⚡ Upgrades</button>
+        <button class="shop-tab" data-tab="coins" style="flex:1;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:var(--bg-glass);color:var(--text-secondary);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;">🪙 Coins</button>
+        <button class="shop-tab" data-tab="gems" style="flex:1;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:var(--bg-glass);color:var(--text-secondary);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;">💎 Gems</button>
+        <button class="shop-tab" data-tab="premium" style="flex:1;padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:var(--bg-glass);color:var(--text-secondary);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;">👑 Premium</button>
+      </div>
+      <div class="scroll-content">
+        <div id="shop-content">
+          <div class="shop-items" id="shop-grid">
+            <!-- Populated by shop.js -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== UPGRADES ==================== -->
+    <div id="screen-upgrades" class="screen hidden">
+      <div class="shop-header">
+        <button class="back-btn" onclick="showScreen('screen-menu')">←</button>
+        <h2>⚡ Upgrades</h2>
+        <span class="shop-currency">🪙 <span id="upgrade-coins">0</span></span>
+      </div>
+      <div class="scroll-content">
+        <div id="upgrade-list">
+          <!-- Populated by progression.js -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SETTINGS ==================== -->
+    <div id="screen-settings" class="screen hidden">
+      <div class="shop-header">
+        <button class="back-btn" onclick="showScreen('screen-menu')">←</button>
+        <h2>⚙️ Settings</h2>
+        <div></div>
+      </div>
+      <div class="scroll-content">
+        <div class="settings-row">
+          <span class="settings-label">🔊 Sound</span>
+          <div class="toggle-switch active" id="toggle-sound"></div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">🎵 Music</span>
+          <div class="toggle-switch active" id="toggle-music"></div>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">📳 Vibration</span>
+          <div class="toggle-switch active" id="toggle-vibrate"></div>
+        </div>
+        <div class="settings-row" style="justify-content:center;border-color:rgba(255,0,0,0.1);margin-top:20px;">
+          <button class="go-btn go-btn-secondary" style="color:#ff4444;width:100%;text-align:center;background:rgba(255,0,0,0.05);border-color:rgba(255,0,0,0.2);" onclick="if(confirm('Reset all progress?')){localStorage.clear();location.reload();}">
+            🗑️ Reset All Progress
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== GAME OVER OVERLAY ==================== -->
+    <div id="game-over">
+      <div class="go-modal">
+        <h2 id="go-title" class="go-lose">💀 Game Over</h2>
+        <div class="go-score-label">Score</div>
+        <div class="go-score" id="go-score">0</div>
+        <div class="go-coins" id="go-coins">🪙 +0 coins</div>
+        <div class="go-btns">
+          <button class="go-btn go-btn-primary" id="go-restart">▶ Play Again</button>
+          <button class="go-btn go-btn-secondary" id="go-double" disabled>📺 Double coins</button>
+          <button class="go-btn go-btn-secondary" onclick="showScreen('screen-menu'); hideGameOver();">🏠 Menu</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script src="visuals.js"></script>

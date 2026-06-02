@@ -1,391 +1,285 @@
-/* ===== Snake Clash — Shop & IAP System =====
-   Coin shop + Premium Gem shop + Real Money IAP + Upgrade Station
+/* ===== Snake Clash — Shop & IAP System (v2 Full-Screen) =====
+   Coin shop + Premium Gem shop + IAP + Upgrade Station
+   Populates the #shop-grid and #upgrade-list HTML elements.
 */
 (function() {
   'use strict';
 
-  let shopContainer = null;
-  let activeTab = 'upgrades'; // coins | gems | upgrades | premium
+  let activeTab = 'upgrades';
 
   // ─── Format price with € ────────────────────────────
   function fmtPrice(price) {
     return '€' + price.toFixed(2);
   }
 
-  // ─── Create Shop Panel ──────────────────────────────
-  function createShopPanel() {
-    if (shopContainer) {
-      shopContainer.style.display = 'block';
-      showTab(activeTab);
-      return;
-    }
+  // ─── Coin Shop Items ────────────────────────────────
+  const SHOP_ITEMS = [
+    { id: 'coins100',  name: '100 Coins',   icon: '🪙', price: 100,  cost: 0, costType: 'real',  realPrice: 1.99,  desc: 'Small coin pack' },
+    { id: 'coins500',  name: '500 Coins',   icon: '💰', price: 500,  cost: 0, costType: 'real',  realPrice: 4.99,  desc: 'Popular coin pack', popular: true },
+    { id: 'coins1200', name: '1,200 Coins', icon: '💼', price: 1200, cost: 0, costType: 'real',  realPrice: 9.99,  desc: 'Best value!', bestValue: true },
+    { id: 'coins3000', name: '3,000 Coins', icon: '🏦', price: 3000, cost: 0, costType: 'real',  realPrice: 19.99, desc: 'Mega coin pack' },
+  ];
 
-    shopContainer = document.createElement('div');
-    shopContainer.id = 'shop-panel';
-    shopContainer.innerHTML = `
-      <div class="shop-overlay"></div>
-      <div class="shop-window">
-        <button class="shop-close">&times;</button>
-        <h2 class="shop-title">🛒 Shop</h2>
-        <div class="shop-balance-bar">
-          <span class="balance-item"><span class="coin-icon">🪙</span> <span id="shop-coins">0</span></span>
-          <span class="balance-item"><span class="gem-icon">💎</span> <span id="shop-gems">0</span></span>
-        </div>
-        <div class="shop-tabs">
-          <button class="shop-tab" data-tab="coins">🪙 Shop</button>
-          <button class="shop-tab" data-tab="gems">💎 Gems</button>
-          <button class="shop-tab" data-tab="upgrades">⚡ Upgrades</button>
-          <button class="shop-tab" data-tab="premium">👑 Premium</button>
-        </div>
-        <div class="shop-content" id="shop-content"></div>
-      </div>
-    `;
+  // ─── Gem Shop Items ─────────────────────────────────
+  const GEM_ITEMS = [
+    { id: 'gems50',  name: '50 Gems',   icon: '💎', price: 50,  cost: 0, costType: 'real', realPrice: 2.99,  desc: 'Small gem pack' },
+    { id: 'gems200', name: '200 Gems',  icon: '💎', price: 200, cost: 0, costType: 'real', realPrice: 9.99,  desc: 'Popular gem pack', popular: true },
+    { id: 'gems500', name: '500 Gems',  icon: '💎', price: 500, cost: 0, costType: 'real', realPrice: 19.99, desc: 'Premium gem pack' },
+  ];
 
-    document.body.appendChild(shopContainer);
+  // ─── Upgrade Items (coins) ──────────────────────────
+  const UPGRADE_ITEMS = [
+    {
+      id: 'u1', name: 'Score Multiplier', icon: '📈', desc: 'More points per food',
+      key: 'scoreMult', maxLevel: 5, baseCost: 50, costMult: 1.6,
+      values: [1, 1.1, 1.25, 1.4, 1.6]
+    },
+    {
+      id: 'u2', name: 'Food Bonus', icon: '🍎', desc: 'Extra points per food eaten',
+      key: 'foodBonus', maxLevel: 5, baseCost: 40, costMult: 1.6,
+      values: [0, 1, 2, 3, 5]
+    },
+    {
+      id: 'u3', name: 'Combo Bonus', icon: '🔥', desc: 'Faster combo buildup',
+      key: 'comboBonus', maxLevel: 5, baseCost: 60, costMult: 1.6,
+      values: [0, 1, 2, 3, 5]
+    },
+    {
+      id: 'u4', name: 'Score Per Food', icon: '⭐', desc: 'Flat score per food',
+      key: 'scorePerFood', maxLevel: 5, baseCost: 30, costMult: 1.6,
+      values: [0, 1, 2, 3, 5]
+    },
+    {
+      id: 'u5', name: 'Magnet Range', icon: '🧲', desc: 'Attract food from further',
+      key: 'magnetRange', maxLevel: 5, baseCost: 80, costMult: 1.7,
+      values: [0, 1, 2, 3, 4]
+    },
+    {
+      id: 'u6', name: 'Shield Chance', icon: '🛡️', desc: 'Start with shield chance',
+      key: 'shieldChance', maxLevel: 5, baseCost: 100, costMult: 1.7,
+      values: [0, 0.1, 0.2, 0.3, 0.5]
+    },
+    {
+      id: 'u7', name: 'Speed Bonus', icon: '⚡', desc: 'Faster base speed',
+      key: 'speedBonus', maxLevel: 5, baseCost: 70, costMult: 1.6,
+      values: [0, 1, 2, 3, 5]
+    },
+    {
+      id: 'u8', name: 'Start Food', icon: '🥗', desc: 'Start with bonus food',
+      key: 'startFood', maxLevel: 3, baseCost: 120, costMult: 1.8,
+      values: [0, 1, 2, 3]
+    },
+    {
+      id: 'u9', name: 'Trail Glow', icon: '✨', desc: 'Snake leaves glowing trail',
+      key: 'trailGlow', maxLevel: 3, baseCost: 150, costMult: 2.0,
+      values: [0, 1, 2, 3]
+    },
+  ];
 
-    shopContainer.querySelector('.shop-close').addEventListener('click', closeShop);
-    shopContainer.querySelector('.shop-overlay').addEventListener('click', closeShop);
+  // ─── Premium Shop Items (gems only) ─────────────────
+  const PREMIUM_ITEMS = [
+    { id: 'p1', name: 'Remove Ads', icon: '🚫', price: 299, costType: 'gems', desc: 'No more ads!', unlockType: 'remove_ads' },
+    { id: 'p2', name: 'VIP Status', icon: '👑', price: 999, costType: 'gems', desc: '2x coins, exclusive items', unlockType: 'vip' },
+    { id: 'p3', name: 'Golden Skin', icon: '🌟', price: 149, costType: 'gems', desc: 'Golden snake skin', unlockType: 'golden_skin' },
+    { id: 'p4', name: 'Neon Trail', icon: '🌈', price: 199, costType: 'gems', desc: 'Neon rainbow trail', unlockType: 'neon_trail' },
+  ];
 
-    shopContainer.querySelectorAll('.shop-tab').forEach(tab => {
-      tab.addEventListener('click', () => showTab(tab.dataset.tab));
-    });
+  // ─── Render Tab Content ─────────────────────────────
+  function renderTabContent(tab, container) {
+    const content = container || document.getElementById('shop-content');
+    if (!content) return;
+    activeTab = tab;
 
-    showTab('upgrades');
-    updateBalances();
-  }
-
-  function closeShop() {
-    if (shopContainer) shopContainer.style.display = 'none';
-  }
-
-  function showTab(tabId) {
-    activeTab = tabId;
-    if (!shopContainer) return;
-    shopContainer.querySelectorAll('.shop-tab').forEach(t => {
-      t.classList.toggle('active', t.dataset.tab === tabId);
-    });
-    const content = shopContainer.querySelector('#shop-content');
-    switch(tabId) {
-      case 'coins': renderCoinShop(content); break;
-      case 'gems': renderGemShop(content); break;
-      case 'upgrades': renderUpgradeStation(content); break;
-      case 'premium': renderPremiumShop(content); break;
-    }
-    updateBalances();
-  }
-
-  function updateBalances() {
-    const coins = shopContainer?.querySelector('#shop-coins');
-    const gems = shopContainer?.querySelector('#shop-gems');
-    if (coins) coins.textContent = ProgressionSystem.getCoinBalance();
-    if (gems) gems.textContent = ProgressionSystem.getGemBalance();
-  }
-
-  // ─── Tab: Coin Shop ─────────────────────────────────
-  function renderCoinShop(container) {
-    const catalog = ProgressionSystem.getCatalog();
-    let html = '<div class="shop-section"><h3>🎨 Themes</h3><div class="shop-grid">';
-    const state = ProgressionSystem.getState();
-    for (const t of catalog.themes) {
-      const owned = state.ownedThemes.includes(t.id);
-      const active = state.activeTheme === t.id;
-      html += `
-        <div class="shop-item ${owned ? 'owned' : ''} ${active ? 'active' : ''}" data-type="theme" data-id="${t.id}" data-price="${t.price}">
-          <div class="item-preview theme-preview" style="background: linear-gradient(135deg, ${t.colors.bg}, ${t.colors.accent})"></div>
-          <div class="item-name">${t.name}</div>
-          <div class="item-desc">${t.desc}</div>
-          ${owned ? (active ? '<span class="item-status">✓ Active</span>' : '<button class="btn-equip">Equip</button>') : `<button class="btn-buy">🪙 ${t.price}</button>`}
-        </div>`;
-    }
-    html += '</div></div><div class="shop-section"><h3>🎲 Board Styles</h3><div class="shop-grid">';
-    for (const s of catalog.boardStyles) {
-      const owned = state.ownedBoardStyles.includes(s.id);
-      const active = state.activeBoardStyle === s.id;
-      html += `
-        <div class="shop-item ${owned ? 'owned' : ''} ${active ? 'active' : ''}" data-type="boardStyle" data-id="${s.id}" data-price="${s.price}">
-          <div class="item-name">${s.name}</div>
-          <div class="item-desc">${s.desc}</div>
-          ${owned ? (active ? '<span class="item-status">✓ Active</span>' : '<button class="btn-equip">Equip</button>') : `<button class="btn-buy">🪙 ${s.price}</button>`}
-        </div>`;
-    }
-    html += '</div></div><div class="shop-section"><h3>⚡ Power-Ups</h3><div class="shop-grid">';
-    for (const p of catalog.powerupPacks) {
-      html += `
-        <div class="shop-item" data-type="powerup" data-id="${p.id}" data-price="${p.price}">
-          <div class="item-name">${p.name}</div>
-          <div class="item-desc">${p.desc}</div>
-          <button class="btn-buy">🪙 ${p.price}</button>
-        </div>`;
-    }
-    html += '</div></div><div class="shop-section"><h3>🚀 Boosters</h3><div class="shop-grid">';
-    for (const b of catalog.boosters) {
-      html += `
-        <div class="shop-item" data-type="booster" data-id="${b.id}" data-price="${b.price}">
-          <div class="item-name">${b.name}</div>
-          <div class="item-desc">${b.desc}</div>
-          <button class="btn-buy">🪙 ${b.price}</button>
-        </div>`;
-    }
-    html += '</div></div>';
-    container.innerHTML = html;
-
-    container.querySelectorAll('.btn-buy').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const item = e.target.closest('.shop-item');
-        const type = item.dataset.type;
-        const id = item.dataset.id;
-        const price = parseInt(item.dataset.price);
-        handleCoinPurchase(type, id, price, item);
+    // Update tab buttons
+    if (!container) {
+      document.querySelectorAll('.shop-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
       });
-    });
-    container.querySelectorAll('.btn-equip').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const item = e.target.closest('.shop-item');
-        const type = item.dataset.type;
-        const id = item.dataset.id;
-        handleEquip(type, id);
-      });
-    });
-  }
-
-  function handleCoinPurchase(type, id, price, itemEl) {
-    const state = ProgressionSystem.getState();
-    if (type === 'theme' && state.ownedThemes.includes(id)) { handleEquip('theme', id); return; }
-    if (type === 'boardStyle' && state.ownedBoardStyles.includes(id)) { handleEquip('boardStyle', id); return; }
-    if (!ProgressionSystem.spendCoins(price)) { showNotification('Not enough coins!'); return; }
-    if (type === 'theme') {
-      state.ownedThemes.push(id);
-      state.activeTheme = id;
-      ProgressionSystem.save();
-    } else if (type === 'boardStyle') {
-      state.ownedBoardStyles.push(id);
-      state.activeBoardStyle = id;
-      ProgressionSystem.save();
-    } else if (type === 'powerup') {
-      const catalog = ProgressionSystem.getCatalog();
-      const pack = catalog.powerupPacks.find(p => p.id === id);
-      if (pack) {
-        for (const [k, v] of Object.entries(pack.items)) {
-          state.powerups[k] = (state.powerups[k] || 0) + v;
-        }
-        ProgressionSystem.save();
-      }
-    } else if (type === 'booster') {
-      state.activeBoosters[id] = true;
-      ProgressionSystem.save();
     }
-    showNotification('Purchased! ✨');
-    showTab('coins');
+
+    content.innerHTML = '';
+    if (tab === 'upgrades') renderUpgrades(content);
+    else if (tab === 'coins') renderCoinShop(content);
+    else if (tab === 'gems') renderGemShop(content);
+    else if (tab === 'premium') renderPremiumShop(content);
   }
 
-  function handleEquip(type, id) {
-    const state = ProgressionSystem.getState();
-    if (type === 'theme' || type === 'boardStyle') {
-      const key = type === 'theme' ? 'activeTheme' : 'activeBoardStyle';
-      const arr = type === 'theme' ? state.ownedThemes : state.ownedBoardStyles;
-      if (!arr.includes(id)) return;
-      state[key] = id;
-      ProgressionSystem.save();
-      showTab('coins');
-      showNotification(`${type === 'theme' ? 'Theme' : 'Style'} applied! ✅`);
-    }
-  }
+  // ─── Render Upgrades ────────────────────────────────
+  function renderUpgrades(targetContainer) {
+    const list = targetContainer || document.getElementById('upgrade-list');
+    if (!list) return;
+    // Don't clear if already cleared by renderTabContent
+    if (!targetContainer) list.innerHTML = '';
 
-  // ─── Tab: Gem Shop (IAP) ────────────────────────────
-  function renderGemShop(container) {
-    const packs = ProgressionSystem.getGemPacks();
-    let html = '<div class="shop-section"><h3>💎 Buy Gems</h3><p class="shop-subtitle">Premium currency for exclusive upgrades</p><div class="shop-grid gem-grid">';
-    for (const p of packs) {
-      const total = p.gems + p.bonus;
-      html += `
-        <div class="shop-item gem-pack ${p.popular ? 'popular' : ''}" data-id="${p.id}">
-          ${p.popular ? '<div class="popular-badge">🔥 Best Value</div>' : ''}
-          <div class="gem-amount">💎 ${total.toLocaleString()}</div>
-          ${p.bonus > 0 ? `<div class="gem-bonus">+${p.bonus} bonus</div>` : ''}
-          <div class="gem-base">${p.gems.toLocaleString()} gems</div>
-          <button class="btn-buy premium-btn">${fmtPrice(p.price)}</button>
-        </div>`;
-    }
-    html += '</div></div>';
-    container.innerHTML = html;
-    container.querySelectorAll('.gem-pack .btn-buy').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const pack = e.target.closest('.gem-pack');
-        const id = pack.dataset.id;
-        const data = ProgressionSystem.getGemPacks().find(p => p.id === id);
-        if (!data) return;
-        const total = data.gems + data.bonus;
-        ProgressionSystem.addGems(total);
-        showNotification(`💎 Purchased ${total} gems!`);
-        updateBalances();
-      });
-    });
-  }
+    list.innerHTML = '';
+    const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : {};
 
-  // ─── Tab: Upgrade Station ───────────────────────────
-  function renderUpgradeStation(container) {
-    const tiers = ProgressionSystem.getUpgradeTiers();
-    const state = ProgressionSystem.getState();
-    const bonuses = ProgressionSystem.getActiveBonuses();
-    let html = '<div class="shop-section"><h3>⚡ Upgrade Station</h3><p class="shop-subtitle">Permanent upgrades that boost your stats</p>';
-    html += `<div class="bonus-summary">
-      <span>🐍 Score: <strong>${(bonuses.scoreMult).toFixed(2)}x</strong></span>
-      <span>🛡️ Shield: <strong>${Math.round(bonuses.shieldChance * 100)}%</strong></span>
-      <span>⚡ Speed: <strong>+${bonuses.speedBonus}</strong></span>
-      <span>🍎 Food+: <strong>+${bonuses.foodBonus}</strong></span>
-      <span>🔥 Combo: <strong>+${bonuses.comboBonus}</strong></span>
-      <span>🍏 Per Food: <strong>+${bonuses.scorePerFood}</strong></span>
-      <span>🧲 Magnet: <strong>+${bonuses.magnetRange}</strong></span>
-    </div>`;
-    html += `<div class="upgrade-balance">
-      <span>🪙 ${state.coins.toLocaleString()}</span>
-      <span>💎 ${state.gems}</span>
-    </div>`;
+    for (const item of UPGRADE_ITEMS) {
+      const currentLevel = state[item.key] || 0;
+      const isMaxed = currentLevel >= item.maxLevel;
+      const nextCost = isMaxed ? 0 : Math.floor(item.baseCost * Math.pow(item.costMult, currentLevel));
+      const currentValue = item.values[Math.min(currentLevel, item.values.length - 1)] || 0;
+      const nextValue = isMaxed ? currentValue : item.values[Math.min(currentLevel + 1, item.values.length - 1)] || 0;
+      const canAfford = (state.coins || 0) >= nextCost;
+      const progress = (currentLevel / item.maxLevel) * 100;
 
-    for (const [cat, tier] of Object.entries(tiers)) {
-      const currentLevel = state.upgrades[cat] || 0;
-      const currentData = tier.levels[currentLevel];
-      const maxed = currentLevel >= tier.maxLevel;
-      const costs = maxed ? null : ProgressionSystem.getUpgradeCost(cat, currentLevel);
-
-      html += `<div class="upgrade-card" data-cat="${cat}">
-        <div class="upgrade-header">
-          <span class="upgrade-icon">${tier.icon}</span>
-          <span class="upgrade-name">${tier.name}</span>
-          <span class="upgrade-level">Lv.${currentLevel} → ${currentLevel + 1}</span>
-        </div>
-        <div class="upgrade-visual">
+      const div = document.createElement('div');
+      div.className = 'upgrade-item';
+      div.innerHTML = `
+        <div class="upgrade-icon">${item.icon}</div>
+        <div class="upgrade-info">
+          <div class="upgrade-name">${item.name}</div>
+          <div class="upgrade-level">Level ${currentLevel}/${item.maxLevel} · ${formatBonusName(item.key)}: ${formatBonusValue(item.key, currentValue)}${isMaxed ? ' (MAX)' : ' → ' + formatBonusValue(item.key, nextValue)}</div>
           <div class="upgrade-bar">
-            <div class="upgrade-fill" style="width: ${(currentLevel / tier.maxLevel) * 100}%"></div>
+            <div class="upgrade-bar-fill" style="width:${progress}%"></div>
           </div>
-          <div class="upgrade-dots">`;
-      for (let i = 0; i <= tier.maxLevel; i++) {
-        html += `<span class="upgrade-dot ${i <= currentLevel ? 'filled' : ''} ${i === currentLevel + 1 ? 'next' : ''}">${i}</span>`;
-      }
-      html += `</div></div>`;
+        </div>
+        ${isMaxed ? '<div class="upgrade-cost" style="background:rgba(0,255,136,0.1);color:var(--neon-green);cursor:default;">MAX</div>'
+                  : `<div class="upgrade-cost" data-id="${item.id}" data-cost="${nextCost}" style="opacity:${canAfford ? 1 : 0.5}">🪙${nextCost}</div>`}
+      `;
+      list.appendChild(div);
 
-      if (currentData) {
-        html += `<div class="upgrade-current">Current: <strong>${currentData.name}</strong></div>`;
-        html += `<div class="upgrade-bonuses">`;
-        for (const [k, v] of Object.entries(currentData.bonus)) {
-          if (v > 0) html += `<span class="bonus-chip">${formatBonusValue(k, v)} ${formatBonusName(k)}</span>`;
+      // Buy button
+      if (!isMaxed) {
+        const buyBtn = div.querySelector('.upgrade-cost');
+        if (buyBtn) {
+          buyBtn.addEventListener('click', function() {
+            const cost = parseInt(this.dataset.cost);
+            if (typeof ProgressionSystem !== 'undefined' && ProgressionSystem.spendCoins(cost)) {
+              ProgressionSystem.upgrade(item.key);
+              renderUpgrades(container);
+              updateBalances();
+              const uc = document.getElementById('upgrade-coins');
+              if (uc) { const s = ProgressionSystem.getState(); uc.textContent = s ? s.coins : 0; }
+            } else {
+              showNotification('Not enough coins!');
+            }
+          });
         }
-        html += `</div>`;
       }
-
-      if (!maxed && costs) {
-        const nextData = tier.levels[currentLevel + 1];
-        if (nextData) {
-          html += `<div class="upgrade-next">Next: <strong>${nextData.name}</strong></div>`;
-        }
-        const canAffordCoins = state.coins >= costs.coins;
-        const canAffordGems = state.gems >= costs.gems;
-        html += `<div class="upgrade-actions">
-          <button class="btn-upgrade coin-upgrade ${canAffordCoins ? '' : 'disabled'}" data-cat="${cat}" data-currency="coins">
-            🪙 ${costs.coins.toLocaleString()}
-          </button>
-          <button class="btn-upgrade gem-upgrade ${canAffordGems ? '' : 'disabled'}" data-cat="${cat}" data-currency="gems">
-            💎 ${costs.gems}
-          </button>
-        </div>`;
-      }
-
-      if (maxed) {
-        html += `<div class="upgrade-maxed">⭐ MAX LEVEL ⭐</div>`;
-      }
-
-      html += `</div>`;
     }
-
-    html += '</div>';
-    container.innerHTML = html;
-
-    container.querySelectorAll('.btn-upgrade:not(.disabled)').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const card = e.target.closest('.upgrade-card');
-        const cat = card.dataset.cat;
-        const currency = btn.dataset.currency;
-        const result = ProgressionSystem.upgradeItem(cat, currency === 'gems');
-        if (result.success) {
-          showNotification(`⬆️ ${cat} upgraded to Lv.${result.newLevel}!`);
-          renderUpgradeStation(container);
-          updateBalances();
-        } else {
-          showNotification(`Not enough ${currency}!`);
-        }
-      });
-    });
   }
 
-  // ─── Tab: Premium Shop (Real Money) ────────────────
+  // ─── Render Coin Shop ───────────────────────────────
+  function renderCoinShop(container) {
+    const grid = container?.querySelector('#shop-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = '1fr';
+
+    for (const item of SHOP_ITEMS) {
+      const div = document.createElement('div');
+      div.className = 'shop-item';
+      if (item.popular) div.style.borderColor = 'var(--neon-yellow)';
+      if (item.bestValue) div.style.borderColor = 'var(--neon-green)';
+      div.innerHTML = `
+        <div class="shop-item-icon">${item.icon}</div>
+        <div class="shop-item-name">${item.name} ${item.bestValue ? '🏆' : ''}</div>
+        <div class="shop-item-desc">${item.desc}</div>
+        <div class="shop-item-price" style="${item.popular?'background:rgba(255,221,0,0.2);color:var(--neon-yellow)':''}">${fmtPrice(item.realPrice)}</div>
+      `;
+      div.addEventListener('click', () => {
+        // Mock IAP - just add coins
+        showNotification(`✅ Purchased ${item.name}! (simulated)`);
+        if (typeof ProgressionSystem !== 'undefined') {
+          ProgressionSystem.addCoins(item.price);
+          updateBalances();
+        }
+      });
+      grid.appendChild(div);
+    }
+  }
+
+  // ─── Render Gem Shop ────────────────────────────────
+  function renderGemShop(container) {
+    const grid = container?.querySelector('#shop-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = '1fr';
+
+    for (const item of GEM_ITEMS) {
+      const div = document.createElement('div');
+      div.className = 'shop-item';
+      if (item.popular) div.style.borderColor = 'var(--neon-yellow)';
+      div.innerHTML = `
+        <div class="shop-item-icon">${item.icon}</div>
+        <div class="shop-item-name">${item.name} ${item.popular ? '🔥' : ''}</div>
+        <div class="shop-item-desc">${item.desc}</div>
+        <div class="shop-item-price" style="background:rgba(124,58,237,0.2);color:var(--neon-purple)">${fmtPrice(item.realPrice)}</div>
+      `;
+      div.addEventListener('click', () => {
+        showNotification(`✅ Purchased ${item.name}! (simulated)`);
+      });
+      grid.appendChild(div);
+    }
+  }
+
+  // ─── Render Premium Shop ────────────────────────────
   function renderPremiumShop(container) {
-    const premium = ProgressionSystem.getPremiumItems();
-    const state = ProgressionSystem.getState();
-    let html = '<div class="shop-section"><h3>👑 Premium Shop</h3><p class="shop-subtitle">Exclusive items — real money only. Can\'t buy with coins!</p>';
+    const grid = container?.querySelector('#shop-grid');
+    if (!grid) return;
 
-    html += '<h4>⚔️ Legendary Snake Skins</h4><div class="shop-grid">';
-    for (const s of premium.legendarySkins) {
-      const owned = state.inventory[s.id];
-      html += `
-        <div class="shop-item premium-item ${owned ? 'owned' : ''}">
-          <div class="premium-tier">${s.tier}</div>
-          <div class="item-name">${s.name}</div>
-          <div class="item-desc">${s.desc}</div>
-          ${owned ? '<span class="item-status">✓ Owned</span>' : `<button class="btn-buy premium-btn iap-btn" data-id="${s.id}" data-price="${s.price}">${fmtPrice(s.price)}</button>`}
-        </div>`;
-    }
-    html += '</div>';
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = '1fr';
 
-    html += '<h4>📦 Value Bundles</h4><div class="shop-grid">';
-    for (const b of premium.bundles) {
-      const owned = state.inventory[b.id];
-      html += `
-        <div class="shop-item premium-item bundle-item ${owned ? 'owned' : ''}">
-          <div class="item-name">${b.name}</div>
-          <div class="item-desc">${b.desc}</div>
-          ${owned ? '<span class="item-status">✓ Owned</span>' : `<button class="btn-buy premium-btn iap-btn" data-id="${b.id}" data-price="${b.price}">${fmtPrice(b.price)}</button>`}
-        </div>`;
-    }
-    html += '</div>';
+    for (const item of PREMIUM_ITEMS) {
+      const hasUnlock = typeof ProgressionSystem !== 'undefined' && ProgressionSystem.hasUnlock(item.unlockType);
+      if (hasUnlock) continue;
 
-    html += '<h4>🎫 Premium Pass</h4><div class="shop-grid">';
-    for (const p of premium.premiumCases) {
-      const owned = state.inventory[p.id];
-      html += `
-        <div class="shop-item premium-item subscription-item ${owned ? 'owned' : ''}">
-          <div class="item-name">${p.name}</div>
-          <div class="item-desc">${p.desc}</div>
-          ${owned ? '<span class="item-status">✓ Owned</span>' : `<button class="btn-buy premium-btn iap-btn" data-id="${p.id}" data-price="${p.price}">${fmtPrice(p.price)}</button>`}
-        </div>`;
-    }
-    html += '</div>';
-
-    const adFree = state.adFree;
-    html += '<h4>🚫 Ads</h4><div class="shop-grid">';
-    html += `
-      <div class="shop-item premium-item ${adFree ? 'owned' : ''}">
-        <div class="item-name">${premium.removeAds.name}</div>
-        <div class="item-desc">${premium.removeAds.desc}</div>
-        ${adFree ? '<span class="item-status">✓ Purchased</span>' : `<button class="btn-buy premium-btn iap-btn" data-id="remove_ads" data-price="${premium.removeAds.price}">${fmtPrice(premium.removeAds.price)}</button>`}
-      </div>`;
-    html += '</div></div>';
-
-    container.innerHTML = html;
-    container.querySelectorAll('.iap-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = btn.dataset.id;
-        const price = parseFloat(btn.dataset.price);
-        if (confirm(`Purchase this item for ${fmtPrice(price)}? (Real money — simulated for now)`)) {
-          ProgressionSystem.purchasePremiumItem(id);
-          showNotification(`✅ Purchased! Check your inventory.`);
-          renderPremiumShop(container);
-          updateBalances();
-        }
+      const div = document.createElement('div');
+      div.className = 'shop-item';
+      div.style.borderColor = 'rgba(124,58,237,0.3)';
+      div.innerHTML = `
+        <div class="shop-item-icon">${item.icon}</div>
+        <div class="shop-item-name">${item.name}</div>
+        <div class="shop-item-desc">${item.desc}</div>
+        <div class="shop-item-price" style="background:rgba(124,58,237,0.2);color:var(--neon-purple)">💎${item.price}</div>
+      `;
+      div.addEventListener('click', () => {
+        showNotification(`✅ Purchased ${item.name}! (simulated)`);
       });
-    });
+      grid.appendChild(div);
+    }
   }
 
-  // ─── Utilities ──────────────────────────────────────
+  // ─── Update Balances ────────────────────────────────
+  function updateBalances() {
+    const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
+    const coins = state ? state.coins : 0;
+    const gems = state ? state.gems : 0;
+
+    // Update shop screen currencies
+    const sc = document.getElementById('shop-coins');
+    if (sc) sc.textContent = coins;
+
+    // Update upgrade screen currencies
+    const uc = document.getElementById('upgrade-coins');
+    if (uc) uc.textContent = coins;
+  }
+
+  // ─── Populate Shop Screen (called from showScreen) ──
+  function populateShopScreen() {
+    updateBalances();
+    // Populate upgrade list (for upgrades screen)
+    const list = document.getElementById('upgrade-list');
+    if (list) renderUpgrades(list);
+    // Show the first tab (upgrades) content
+    const content = document.getElementById('shop-content');
+    if (content) {
+      renderTabContent('upgrades', content);
+    }
+  }
+
+  // ─── Populate Upgrade Screen (called from showScreen) ──
+  function populateUpgradeScreen() {
+    updateBalances();
+    const list = document.getElementById('upgrade-list');
+    if (list) renderUpgrades(list);
+  }
+
+  // ─── Helpers ────────────────────────────────────────
   function formatBonusName(key) {
     const names = {
       scoreMult: 'Score', foodBonus: 'Food Bonus',
@@ -404,23 +298,43 @@
   }
 
   function showNotification(msg) {
-    const el = document.getElementById('notification') || (() => {
-      const n = document.createElement('div');
-      n.id = 'notification';
-      document.body.appendChild(n);
-      return n;
-    })();
+    const existing = document.querySelector('.notification-popup');
+    if (existing) existing.remove();
+
+    const el = document.createElement('div');
+    el.className = 'notification-popup';
     el.textContent = msg;
-    el.className = 'show';
-    clearTimeout(el._timeout);
-    el._timeout = setTimeout(() => el.className = '', 2500);
+    el.style.cssText = 'position:fixed;top:40%;left:50%;transform:translateX(-50%);padding:14px 24px;border-radius:14px;background:rgba(20,20,50,0.95);border:1px solid var(--neon-green);color:var(--neon-green);font-size:16px;font-weight:600;z-index:200;text-align:center;pointer-events:none;animation:fadeIn 0.3s ease;';
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 2500);
   }
+
+  // ─── Tab button event listeners ──────────────────
+  document.addEventListener('click', function(e) {
+    const tab = e.target.closest('.shop-tab');
+    if (tab && tab.dataset.tab) {
+      renderTabContent(tab.dataset.tab);
+    }
+  });
+
+  // ─── Override showScreen to populate shop/upgrade content ──
+  const origShowScreen = window.showScreen;
+  window.showScreen = function(id) {
+    if (id === 'screen-shop') {
+      ShopUI.populateShop();
+    }
+    if (id === 'screen-upgrades') {
+      ShopUI.populateUpgrades();
+    }
+    if (origShowScreen) origShowScreen(id);
+  };
 
   // ─── Export ─────────────────────────────────────────
   window.ShopUI = {
-    open: createShopPanel,
-    close: closeShop,
-    showTab,
+    populateShop: populateShopScreen,
+    populateUpgrades: populateUpgradeScreen,
     updateBalances,
+    showTab: renderTabContent,
+    renderTab: renderTabContent,
   };
 })();
