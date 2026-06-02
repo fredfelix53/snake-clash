@@ -98,20 +98,28 @@
     }
 
     content.innerHTML = '';
-    if (tab === 'upgrades') renderUpgrades(content);
-    else if (tab === 'coins') renderCoinShop(content);
-    else if (tab === 'gems') renderGemShop(content);
-    else if (tab === 'premium') renderPremiumShop(content);
+    if (tab === 'upgrades') {
+      renderUpgrades(content);
+    } else {
+      // Create a grid container for shop items
+      const grid = document.createElement('div');
+      grid.className = 'shop-items';
+      grid.id = 'shop-grid';
+      grid.style.gridTemplateColumns = '1fr';
+      content.appendChild(grid);
+
+      if (tab === 'coins') renderCoinShop(content);
+      else if (tab === 'gems') renderGemShop(content);
+      else if (tab === 'premium') renderPremiumShop(content);
+    }
   }
 
   // ─── Render Upgrades ────────────────────────────────
   function renderUpgrades(targetContainer) {
     const list = targetContainer || document.getElementById('upgrade-list');
     if (!list) return;
-    // Don't clear if already cleared by renderTabContent
+    // Only clear if not already cleared by renderTabContent
     if (!targetContainer) list.innerHTML = '';
-
-    list.innerHTML = '';
     const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : {};
 
     for (const item of UPGRADE_ITEMS) {
@@ -309,25 +317,13 @@
     setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 2500);
   }
 
-  // ─── Tab button event listeners ──────────────────
+  // ─── Tab button event listeners (delegated) ──────
   document.addEventListener('click', function(e) {
     const tab = e.target.closest('.shop-tab');
     if (tab && tab.dataset.tab) {
       renderTabContent(tab.dataset.tab);
     }
   });
-
-  // ─── Override showScreen to populate shop/upgrade content ──
-  const origShowScreen = window.showScreen;
-  window.showScreen = function(id) {
-    if (id === 'screen-shop') {
-      ShopUI.populateShop();
-    }
-    if (id === 'screen-upgrades') {
-      ShopUI.populateUpgrades();
-    }
-    if (origShowScreen) origShowScreen(id);
-  };
 
   // ─── Export ─────────────────────────────────────────
   window.ShopUI = {

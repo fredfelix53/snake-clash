@@ -7,19 +7,15 @@
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(id)?.classList.add('active');
 
-    // Update shop/upgrade coins when navigating
+    // Populate shop/upgrade screens and update currencies
     if (id === 'screen-shop') {
-      const sc = document.getElementById('shop-coins');
-      if (sc) {
-        const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
-        sc.textContent = state ? state.coins : coins;
+      if (typeof ShopUI !== 'undefined') {
+        ShopUI.populateShop();
       }
     }
     if (id === 'screen-upgrades') {
-      const uc = document.getElementById('upgrade-coins');
-      if (uc) {
-        const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
-        uc.textContent = state ? state.coins : coins;
+      if (typeof ShopUI !== 'undefined') {
+        ShopUI.populateUpgrades();
       }
     }
   };
