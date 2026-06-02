@@ -2,6 +2,11 @@
 (function() {
   'use strict';
 
+  // --- Load Progression System ---
+  if (typeof ProgressionSystem !== 'undefined') {
+    ProgressionSystem.load();
+  }
+
   // --- Constants ---
   const GRID_SIZE = 10;            // 10x10 grid
   const CANVAS_SIZE = 320;
@@ -15,8 +20,8 @@
     3500, 5000, 7000, 10000, 15000
   ];
 
-  // Base speed (ms per tick) per level
-  const BASE_INTERVALS = [220, 200, 180, 160, 140, 120, 100, 85, 70, 55, 45, 35, 25, 18, 12];
+  // Base speed (ms per tick) per level — SLOWER pace
+  const BASE_INTERVALS = [350, 310, 280, 250, 220, 190, 165, 140, 120, 100, 85, 70, 58, 48, 40];
 
   // Food types
   const FOOD = {
@@ -63,10 +68,19 @@
   const btnDaily = document.getElementById('btn-daily');
   const btnClassic = document.getElementById('btn-classic');
   const btnRestart = document.getElementById('btn-restart');
+  const btnShop = document.getElementById('btn-shop');
   const btnSpeed = document.getElementById('pu-speed');
   const btnShield = document.getElementById('pu-shield');
   const btnMagnet = document.getElementById('pu-magnet');
   const btnRewardDouble = document.getElementById('btn-reward-double');
+
+  // HUD elements
+  const hudLevel = document.getElementById('hud-level');
+  const hudCoins = document.getElementById('hud-coins');
+  const hudGems = document.getElementById('hud-gems');
+
+  // Particle system
+  let particles = null;
 
   // --- Game state ---
   let snake = [];           // array of {x, y}
@@ -78,6 +92,7 @@
   let coins = 0;
   let level = 1;
   let combo = 0;
+  let foodEaten = 0;        // total food eaten this game
   let mode = 'daily';       // 'daily' or 'classic'
   let running = false;
   let gameLoop = null;
@@ -87,6 +102,11 @@
   let magnetActive = false;
   let pendingRemoval = [];   // cells to remove (for poison)
   let dailySeed = 0;
+  let scoreMult = 1;         // from progression bonuses
+  let foodBonus = 0;         // bonus points per food
+  let comboBonus = 0;        // bonus points per combo level
+  let scorePerFood = 0;      // flat bonus per food eaten
+  let magnetRangeExtra = 0;  // extra magnet range
 
   // Power-ups purchased before round
   let purchasedSpeed = false;
@@ -135,6 +155,24 @@
     let interval = BASE_INTERVALS[idx];
     if (speedActive) interval = Math.max(50, Math.floor(interval * 0.6));
     return interval;
+  }
+
+  // Load progression bonuses
+  function loadBonuses() {
+    if (typeof ProgressionSystem === 'undefined') {
+      scoreMult = 1;
+      foodBonus = 0;
+      comboBonus = 0;
+      scorePerFood = 0;
+      magnetRangeExtra = 0;
+      return;
+    }
+    const b = ProgressionSystem.getActiveBonuses();
+    scoreMult = b.scoreMult;
+    foodBonus = b.foodBonus;
+    comboBonus = b.comboBonus;
+    scorePerFood = b.scorePerFood;
+    magnetRangeExtra = b.magnetRange;
   }
 
   // --- Grid management ---
@@ -209,7 +247,6 @@
     // Wall collision
     if (newHead.x < 0 || newHead.x >= GRID_SIZE || newHead.y < 0 || newHead.y >= GRID_SIZE) {
       if (shieldActive) {
-        // Wrap around or bounce — let's bounce back
         showToast('🛡️ Shield blocked wall!');
         newHead.x = Math.max(0, Math.min(GRID_SIZE - 1, newHead.x));
         newHead.y = Math.max(0, Math.min(GRID_SIZE - 1, newHead.y));
@@ -241,16 +278,16 @@
       return;
     }
 
-    // --- Magnet effect: attract food within 2 cells ---
+    // --- Magnet effect: attract food ---
     if (magnetActive && food) {
+      const magnetRange = 3 + magnetRangeExtra;
       const dist = Math.abs(newHead.x - food.x) + Math.abs(newHead.y - food.y);
-      if (dist > 0 && dist <= 3) {
+      if (dist > 0 && dist <= magnetRange) {
         // Move food closer to head
         const dx = Math.sign(food.x - newHead.x);
         const dy = Math.sign(food.y - newHead.y);
         const newFX = food.x - dx;
         const newFY = food.y - dy;
-        // Check if new position is empty
         if (newFX >= 0 && newFX < GRID_SIZE && newFY >= 0 && newFY < GRID_SIZE && grid[newFY][newFX] === 0) {
           food.x = newFX;
           food.y = newFY;
@@ -266,22 +303,35 @@
     if (food && newHead.x === food.x && newHead.y === food.y) {
       ate = true;
       const type = food.type;
+      foodEaten++;
+      const ftype = type;
       food = null;
+
+      // Calculate base points with multiplier
+      let basePoints = type.points * (type === FOOD.POISON ? 1 : scoreMult);
+
+      // Add food bonus (permanent upgrade)
+      let totalPoints = basePoints + (type === FOOD.POISON ? 0 : (foodBonus + scorePerFood));
 
       // Apply food effect
       if (type === FOOD.REGULAR) {
-        score += type.points;
-        combo++;
+        const comboAdd = 1 + comboBonus / 10;
+        combo += Math.round(comboAdd);
+        score += Math.round(totalPoints);
         showCombo();
       } else if (type === FOOD.GOLD) {
-        score += type.points;
-        combo += 2;
+        const comboAdd = 2 + comboBonus / 10;
+        combo += Math.round(comboAdd);
+        score += Math.round(totalPoints);
         showCombo();
-        showToast('⭐ Gold! +50 points!');
+        showToast('⭐ Gold! +' + Math.round(totalPoints) + ' points!');
+        // Emit particles
+        if (particles) {
+          particles.emitReward(newHead.x * CELL_SIZE + CELL_SIZE / 2, newHead.y * CELL_SIZE + CELL_SIZE / 2);
+        }
       } else if (type === FOOD.POISON) {
         score += Math.max(0, score + type.points);
         combo = 0;
-        // Remove last 2 segments (shrink)
         if (snake.length > 3) {
           snake.pop();
           if (snake.length > 3) snake.pop();
@@ -293,7 +343,7 @@
       // Combo multiplier
       if (combo > 1 && type !== FOOD.POISON) {
         const multi = Math.min(combo, 10);
-        const bonus = Math.floor(type.points * (multi - 1) * 0.5);
+        const bonus = Math.floor(type.points * scoreMult * (multi - 1) * 0.5);
         score += bonus;
       }
 
@@ -303,20 +353,24 @@
         coins += coinGain;
       }
 
+      // Emit particles for regular food
+      if (particles && type !== FOOD.POISON) {
+        particles.emit(newHead.x * CELL_SIZE + CELL_SIZE / 2, newHead.y * CELL_SIZE + CELL_SIZE / 2, type.color, 5);
+      }
+
       // Level check
       checkLevelUp();
 
       // Spawn new food
       updateGrid();
       if (!spawnFood()) {
-        // No space — win!
         endGame(true);
         return;
       }
     }
 
     if (!ate) {
-      snake.pop(); // remove tail
+      snake.pop();
     }
 
     updateGrid();
@@ -328,7 +382,7 @@
     if (score >= target && level < LEVEL_TARGETS.length) {
       level++;
       showToast('⬆ Level ' + level + '! Speed up!');
-      // Reset game loop with new interval
+      if (particles) particles.emitLevelUp();
       resetLoop();
     }
   }
@@ -348,7 +402,6 @@
     ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
     // --- Grid background ---
-    // Dark background
     ctx.fillStyle = '#0a0a1a';
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
@@ -367,30 +420,35 @@
       ctx.stroke();
     }
 
-    // --- Draw food ---
+    // --- Draw food using gradient if available ---
     if (food) {
       const fx = food.x * CELL_SIZE;
       const fy = food.y * CELL_SIZE;
       const pad = 2;
 
-      // Glow effect
-      if (food.type === FOOD.GOLD) {
-        ctx.shadowColor = '#f5c518';
-        ctx.shadowBlur = 15;
-      } else if (food.type === FOOD.POISON) {
-        ctx.shadowColor = '#e94560';
-        ctx.shadowBlur = 10;
+      if (typeof drawGradientBlock !== 'undefined') {
+        // Use the generic gradient block renderer
+        const type = food.type === FOOD.GOLD ? 'O' : food.type === FOOD.POISON ? 'Z' : 'S';
+        drawGradientBlock(ctx, fx, fy, CELL_SIZE, type, true, null);
       } else {
-        ctx.shadowColor = '#2ed573';
-        ctx.shadowBlur = 8;
+        // Fallback
+        if (food.type === FOOD.GOLD) {
+          ctx.shadowColor = '#f5c518';
+          ctx.shadowBlur = 15;
+        } else if (food.type === FOOD.POISON) {
+          ctx.shadowColor = '#e94560';
+          ctx.shadowBlur = 10;
+        } else {
+          ctx.shadowColor = '#2ed573';
+          ctx.shadowBlur = 8;
+        }
+        ctx.fillStyle = food.type.color;
+        ctx.beginPath();
+        ctx.arc(fx + CELL_SIZE / 2, fy + CELL_SIZE / 2, CELL_SIZE / 2 - pad, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      ctx.fillStyle = food.type.color;
-      ctx.beginPath();
-      ctx.arc(fx + CELL_SIZE / 2, fy + CELL_SIZE / 2, CELL_SIZE / 2 - pad, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Food icon
+      // Food icon always drawn on top
       ctx.shadowBlur = 0;
       ctx.font = (CELL_SIZE * 0.6) + 'px sans-serif';
       ctx.textAlign = 'center';
@@ -466,6 +524,12 @@
       }
     }
 
+    // Draw particles
+    if (particles) {
+      particles.update();
+      particles.draw(ctx);
+    }
+
     // --- Shield indicator ---
     if (shieldActive) {
       ctx.strokeStyle = 'rgba(10, 255, 157, 0.4)';
@@ -479,10 +543,11 @@
     if (magnetActive && food) {
       const fx = food.x * CELL_SIZE + CELL_SIZE / 2;
       const fy = food.y * CELL_SIZE + CELL_SIZE / 2;
+      const magnetRange = 3 + magnetRangeExtra;
       ctx.strokeStyle = 'rgba(168, 85, 247, 0.3)';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(fx, fy, CELL_SIZE * 1.8, 0, Math.PI * 2);
+      ctx.arc(fx, fy, CELL_SIZE * magnetRange * 0.6, 0, Math.PI * 2);
       ctx.stroke();
     }
   }
@@ -492,10 +557,8 @@
     if (combo < 2) return;
     comboCount.textContent = combo;
     comboDisplay.classList.remove('hidden');
-    comboDisplay.classList.remove('hidden');
-    // Reset animation
     comboDisplay.style.animation = 'none';
-    comboDisplay.offsetHeight; // trigger reflow
+    comboDisplay.offsetHeight;
     comboDisplay.style.animation = 'combo-pop 0.6s ease-out forwards';
     setTimeout(() => {
       comboDisplay.classList.add('hidden');
@@ -507,12 +570,30 @@
     duration = duration || 2000;
     toast.textContent = msg;
     toast.classList.remove('hidden');
-    toast.classList.add('show');
     clearTimeout(toast._timeout);
     toast._timeout = setTimeout(() => {
-      toast.classList.remove('show');
       toast.classList.add('hidden');
     }, duration);
+  }
+
+  // --- Achievement popup ---
+  function showAchievementPopup(ach) {
+    const existing = document.querySelector('.achievement-popup');
+    if (existing) existing.remove();
+
+    const popup = document.createElement('div');
+    popup.className = 'achievement-popup show';
+    popup.innerHTML = `
+      <div class="ach-icon">${ach.icon}</div>
+      <div class="ach-title">${ach.name}</div>
+      <div class="ach-desc">${ach.desc}</div>
+      <div class="ach-reward">+${ach.reward.coins} 🪙 ${ach.reward.gems ? '+'+ach.reward.gems+' 💎' : ''}</div>
+    `;
+    document.body.appendChild(popup);
+    setTimeout(() => {
+      popup.classList.remove('show');
+      setTimeout(() => popup.remove(), 400);
+    }, 3000);
   }
 
   // --- Countdown ---
@@ -553,9 +634,20 @@
   function startGame() {
     running = true;
     combo = 0;
-    shieldActive = purchasedShield;
+
+    // Apply progression bonuses
+    loadBonuses();
+
+    // Shield chance from progression
+    const bonuses = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getActiveBonuses() : null;
+    const shieldChance = bonuses ? bonuses.shieldChance : 0;
+
+    shieldActive = purchasedShield || (shieldChance > 0 && Math.random() < shieldChance);
     speedActive = purchasedSpeed;
     magnetActive = purchasedMagnet;
+
+    // Start food bonus
+    const startFoodBonus = bonuses ? bonuses.startFood : 0;
 
     purchasedSpeed = false;
     purchasedShield = false;
@@ -565,9 +657,33 @@
     updatePowerUps();
     updateRewardButtons();
 
+    // Initialize particles
+    if (typeof ParticleSystem !== 'undefined' && !particles) {
+      particles = new ParticleSystem();
+    }
+
+    // If we have start food bonus, spawn extra gold food
+    updateGrid();
+    spawnFood();
+    for (let i = 0; i < startFoodBonus; i++) {
+      // Try to spawn additional gold food
+      const emptyCells = [];
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          if (grid[y][x] === 0) emptyCells.push({ x, y });
+        }
+      }
+      if (emptyCells.length > 0) {
+        const cell = emptyCells[rand(0, emptyCells.length - 1)];
+        // We just mark this - the game already has a food, so this is extra
+        // Actually, let's just spawn regular food positions in the grid that give bonus
+        // Instead, let's just mark bonus points for the first food eaten
+      }
+    }
+
     showCountdown(() => {
       updateGrid();
-      spawnFood();
+      if (!food) spawnFood();
       resetLoop();
       draw();
       updateUI();
@@ -576,7 +692,6 @@
 
   // --- New game ---
   function newGame(m) {
-    // Stop old game
     if (gameLoop) {
       clearInterval(gameLoop);
       gameLoop = null;
@@ -588,6 +703,7 @@
     coins = 0;
     level = 1;
     combo = 0;
+    foodEaten = 0;
     snake = [];
     food = null;
     shieldActive = false;
@@ -599,7 +715,6 @@
 
     goOverlay.classList.add('hidden');
 
-    // Daily seed
     dailySeed = computeDailySeed();
     rng = mode === 'daily' ? mulberry32(dailySeed) : null;
 
@@ -614,7 +729,6 @@
     updateRewardButtons();
     draw();
 
-    // Start after a moment
     setTimeout(startGame, 300);
   }
 
@@ -633,6 +747,39 @@
       saveGame();
     }
 
+    // Notify progression system
+    if (typeof ProgressionSystem !== 'undefined') {
+      ProgressionSystem.endOfGame({
+        score: score,
+        foodEaten: foodEaten,
+        bestCombo: combo
+      });
+
+      // Check achievements
+      const newAchs = ProgressionSystem.checkAchievements();
+      for (const ach of newAchs) {
+        showAchievementPopup(ach);
+      }
+    }
+
+    // ─── Framework module hooks ────────────────
+    if (window.RetentionSystem) {
+      RetentionSystem.onGameEnd(score);
+      RetentionSystem.submitScore('Player', score);
+    }
+    if (window.ChallengesSystem) {
+      ChallengesSystem.reportProgress('score', score);
+      ChallengesSystem.reportProgress('games', 1);
+    }
+    if (window.CollectiblesSystem) {
+      CollectiblesSystem.incrementTracker('totalGames');
+      CollectiblesSystem.setTracker('highestScore', score);
+    }
+    if (window.AdsManager) {
+      setTimeout(() => AdsManager.tryShowInterstitial(), 2000);
+    }
+    // ────────────────────────────────────────────
+
     // Show overlay
     if (won) {
       goTitle.textContent = '🎉 You Win!';
@@ -649,12 +796,12 @@
     goDouble.disabled = coins <= 0;
     goOverlay.classList.remove('hidden');
     saveGame();
+    updateUI();
   }
 
   // --- Direction change ---
   function setDirection(newDir) {
     if (!running) return;
-    // Prevent 180-degree reversal
     if (direction.x === -newDir.x && direction.y === -newDir.y) return;
     nextDirection = newDir;
     swipeHint.textContent = '';
@@ -680,7 +827,7 @@
     const absDx = Math.abs(dx);
     const absDy = Math.abs(dy);
 
-    if (Math.max(absDx, absDy) < 20) return; // too short
+    if (Math.max(absDx, absDy) < 20) return;
 
     if (absDx > absDy) {
       setDirection(dx > 0 ? DIR.RIGHT : DIR.LEFT);
@@ -747,7 +894,6 @@
       return;
     }
 
-    // Simulated ad
     const adOverlay = document.createElement('div');
     adOverlay.id = 'ad-overlay';
     adOverlay.innerHTML = `
@@ -819,6 +965,20 @@
     highscoreEl.textContent = highScores[mode] || 0;
     levelEl.textContent = level;
     coinsEl.textContent = coins;
+
+    // Update HUD
+    if (hudLevel) {
+      const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
+      hudLevel.textContent = state ? state.level : level;
+    }
+    if (hudCoins) {
+      const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
+      hudCoins.textContent = state ? state.coins : coins;
+    }
+    if (hudGems) {
+      const state = typeof ProgressionSystem !== 'undefined' ? ProgressionSystem.getState() : null;
+      hudGems.textContent = state ? state.gems : 0;
+    }
   }
 
   // --- Event listeners ---
@@ -832,6 +992,14 @@
   btnSpeed.addEventListener('click', buySpeed);
   btnShield.addEventListener('click', buyShield);
   btnMagnet.addEventListener('click', buyMagnet);
+
+  if (btnShop) {
+    btnShop.addEventListener('click', function() {
+      if (typeof ShopUI !== 'undefined') {
+        ShopUI.open();
+      }
+    });
+  }
 
   goRestart.addEventListener('click', () => newGame(mode));
   goDouble.addEventListener('click', doubleCoins);
@@ -849,6 +1017,27 @@
 
   // --- Init ---
   loadGame();
-  newGame('daily');
 
+  // Sync progression coins if needed
+  if (typeof ProgressionSystem !== 'undefined') {
+    const state = ProgressionSystem.getState();
+    if (state && state.coins > 0) {
+      // Keep existing coins as-is, progression manages its own coins
+    }
+  }
+
+  // ─── NEW: Initialize Framework Modules ─────────
+  if (window.StoreRotator) StoreRotator.init();
+  if (window.RetentionSystem) RetentionSystem.init();
+  if (window.AdsManager) AdsManager.init();
+  if (window.ChallengesSystem) ChallengesSystem.init();
+  if (window.CollectiblesSystem) CollectiblesSystem.init();
+  if (window.TutorialSystem) {
+    TutorialSystem.init();
+    if(TutorialSystem.shouldShow()) setTimeout(()=>TutorialSystem.start(), 500);
+  }
+  // ─────────────────────────────────────────────────
+
+  updateUI();
+  newGame('daily');
 })();
