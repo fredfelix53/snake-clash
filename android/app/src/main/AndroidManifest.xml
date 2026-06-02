@@ -8,7 +8,7 @@
         android:allowBackup="true"
         android:label="Snake Clash"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SnakeClash"
+        android:theme="@style/Theme.Game"
         android:hardwareAccelerated="true"
         android:resizeableActivity="false"
         android:usesCleartextTraffic="true"
