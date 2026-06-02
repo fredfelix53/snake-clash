@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Snake Clash</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header>
+      <h1>🐍 SNAKE CLASH</h1>
+      <div class="header-info">
+        <div class="score-box">
+          <span class="label">SCORE</span>
+          <span id="score">0</span>
+        </div>
+        <div class="high-box">
+          <span class="label">BEST</span>
+          <span id="highscore">0</span>
+        </div>
+        <div class="level-box">
+          <span class="label">LEVEL</span>
+          <span id="level">1</span>
+        </div>
+        <div class="coin-box">
+          <span class="label">🪙</span>
+          <span id="coins">0</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Game mode toggle -->
+    <div id="mode-bar">
+      <button id="btn-daily" class="mode-btn active">Daily</button>
+      <button id="btn-classic" class="mode-btn">Classic</button>
+      <button id="btn-restart" class="mode-btn danger">↻</button>
+    </div>
+
+    <!-- Power-up bar (before round) -->
+    <div id="powerup-bar">
+      <button class="pu-btn" id="pu-speed" disabled>
+        <span class="pu-icon">⚡</span>
+        <span class="pu-label">Speed</span>
+        <span class="pu-cost">🪙5</span>
+      </button>
+      <button class="pu-btn" id="pu-shield" disabled>
+        <span class="pu-icon">🛡️</span>
+        <span class="pu-label">Shield</span>
+        <span class="pu-cost">🪙8</span>
+      </button>
+      <button class="pu-btn" id="pu-magnet" disabled>
+        <span class="pu-icon">🧲</span>
+        <span class="pu-label">Magnet</span>
+        <span class="pu-cost">🪙12</span>
+      </button>
+    </div>
+
+    <!-- Game board -->
+    <div id="board-container">
+      <canvas id="board" width="320" height="320"></canvas>
+      <div id="countdown-overlay" class="hidden">
+        <span id="countdown-text">3</span>
+      </div>
+    </div>
+
+    <!-- Swipe hint -->
+    <div id="swipe-hint">Swipe to move</div>
+
+    <!-- Combo display -->
+    <div id="combo-display" class="hidden">🔥 x<span id="combo-count">1</span></div>
+
+    <!-- Message toast -->
+    <div id="toast" class="hidden"></div>
+
+    <!-- Banner ad placeholder -->
+    <div id="ad-banner">
+      <span class="ad-text">[ Ad Space ]</span>
+    </div>
+
+    <!-- Rewarded ad section -->
+    <div id="reward-section">
+      <button id="btn-reward-double" class="reward-btn" disabled>
+        📺 Watch ad to double coins
+      </button>
+    </div>
+  </div>
+
+  <!-- Game Over overlay -->
+  <div id="game-over" class="hidden">
+    <div class="go-modal">
+      <h2 id="go-title">💀 Game Over</h2>
+      <div class="go-score-label">Score</div>
+      <div class="go-score" id="go-score">0</div>
+      <div class="go-detail" id="go-detail"></div>
+      <div class="go-coins" id="go-coins">🪙 +0 coins</div>
+      <div class="go-btns">
+        <button class="go-reward" id="go-double" disabled>
+          📺 Double coins
+        </button>
+        <button class="go-next" id="go-restart">
+          Play Again
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

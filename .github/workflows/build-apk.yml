@@ -1,0 +1,65 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  schedule:
+    - cron: '0 6 * * *'   # Daily rebuild at 6 AM UTC
+  workflow_dispatch:       # Manual trigger
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sync game files to Android assets
+        run: |
+          mkdir -p android/app/src/main/assets/game
+          cp -r game/* android/app/src/main/assets/game/
+          echo "Game files synced"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew 2>/dev/null || true
+
+      - name: Build APK
+        working-directory: ./android
+        run: |
+          if [ -f gradlew ]; then
+            ./gradlew assembleRelease
+          else
+            # Create gradlew if it doesn't exist
+            echo "Creating gradle wrapper..."
+            gradle wrapper --gradle-version 8.5
+            ./gradlew assembleRelease
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: snake-clash-apk
+          path: android/app/build/outputs/apk/release/*.apk
+          retention-days: 90
+
+      - name: Get APK info
+        run: |
+          APK=$(ls android/app/build/outputs/apk/release/*.apk 2>/dev/null | head -1)
+          if [ -n "$APK" ]; then
+            echo "✅ APK built: $APK"
+            ls -lh "$APK"
+          else
+            echo "⚠️ No APK found, checking debug output..."
+            ls -la android/app/build/outputs/apk/ 2>/dev/null || echo "No output dir"
+          fi
