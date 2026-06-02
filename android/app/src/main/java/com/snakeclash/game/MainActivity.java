@@ -2,7 +2,7 @@ package com.snakeclash.game;
 
 import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.view.View;
+import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -29,7 +29,7 @@ public class MainActivity extends AppCompatActivity {
     private WebView webView;
     private AdView bannerAdView;
     private RewardedAd rewardedAd;
-    private boolean adLoaded = false;
+    private static final String TAG = "SnakeClash";
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -37,105 +37,137 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Initialize AdMob
-        MobileAds.initialize(this, new OnInitializationCompleteListener() {
-            @Override
-            public void onInitializationComplete(InitializationStatus initializationStatus) {
-                loadBannerAd();
-                loadRewardedAd();
+        // Setup WebView FIRST - before AdMob - so game loads even if ads fail
+        setupWebView();
+
+        // Initialize AdMob (wrapped to prevent crash)
+        try {
+            MobileAds.initialize(this, new OnInitializationCompleteListener() {
+                @Override
+                public void onInitializationComplete(InitializationStatus initializationStatus) {
+                    loadBannerAd();
+                    loadRewardedAd();
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "AdMob init failed: " + e.getMessage());
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private void setupWebView() {
+        try {
+            webView = findViewById(R.id.webView);
+            if (webView == null) {
+                Log.e(TAG, "WebView not found in layout!");
+                return;
             }
-        });
 
-        // Setup WebView
-        webView = findViewById(R.id.webView);
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
-        settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
-        settings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.SINGLE_COLUMN);
+            WebSettings settings = webView.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setAllowFileAccess(true);
+            settings.setAllowContentAccess(true);
+            settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+            settings.setLayoutAlgorithm(WebSettings.LayoutAlgorithm.NARROW_COLUMNS);
+            settings.setLoadWithOverviewMode(true);
+            settings.setUseWideViewPort(true);
+            settings.setBuiltInZoomControls(false);
+            settings.setDisplayZoomControls(false);
 
-        webView.setWebChromeClient(new WebChromeClient());
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                // Inject the Android ad interface
-                view.evaluateJavascript(
-                    "window.AndroidAds = {" +
-                    "  showRewarded: function(callback) {" +
-                    "    document.AD_PENDING = callback;" +
-                    "    document.AD_TRIGGER = Date.now();" +
-                    "  }" +
-                    "};", null);
-            }
-        });
+            webView.setWebChromeClient(new WebChromeClient());
+            webView.setWebViewClient(new WebViewClient() {
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    super.onPageFinished(view, url);
+                    Log.d(TAG, "Game loaded: " + url);
+                    view.evaluateJavascript(
+                        "window.AndroidAds = {};", null);
+                    view.evaluateJavascript(
+                        "if(typeof window.onAndroidReady === 'function') window.onAndroidReady();", null);
+                }
 
-        // JavaScript interface for ad callbacks
-        webView.addJavascriptInterface(new Object() {
-            @JavascriptInterface
-            public void onAdWatched() {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        loadRewardedAd(); // preload next
-                    }
-                });
-            }
-        }, "AdBridge");
+                @Override
+                public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                    Log.e(TAG, "WebView error " + errorCode + ": " + description);
+                }
+            });
 
-        // Load game
-        webView.loadUrl("file:///android_asset/game/index.html");
+            webView.addJavascriptInterface(new Object() {
+                @JavascriptInterface
+                public void onAdWatched() {
+                    runOnUiThread(() -> {
+                        Log.d(TAG, "Ad watched callback");
+                        loadRewardedAd();
+                    });
+                }
+                @JavascriptInterface
+                public void logMessage(String message) {
+                    Log.d(TAG, "JS: " + message);
+                }
+            }, "AdBridge");
+
+            webView.loadUrl("file:///android_asset/game/index.html");
+        } catch (Exception e) {
+            Log.e(TAG, "WebView setup failed: " + e.getMessage());
+        }
     }
 
     private void loadBannerAd() {
-        FrameLayout adContainer = findViewById(R.id.bannerContainer);
-        bannerAdView = new AdView(this);
-        bannerAdView.setAdUnitId("ca-app-pub-3940256099942544/6300978111"); // Test banner ad unit
-        bannerAdView.setAdSize(AdSize.BANNER);
-        adContainer.addView(bannerAdView);
+        try {
+            FrameLayout adContainer = findViewById(R.id.bannerContainer);
+            if (adContainer == null) return;
 
-        AdRequest request = new AdRequest.Builder().build();
-        bannerAdView.loadAd(request);
+            bannerAdView = new AdView(this);
+            bannerAdView.setAdUnitId("ca-app-pub-3940256099942544/6300978111");
+            bannerAdView.setAdSize(AdSize.SMART_BANNER);
+            adContainer.addView(bannerAdView);
+            bannerAdView.loadAd(new AdRequest.Builder().build());
+        } catch (Exception e) {
+            Log.e(TAG, "Banner ad failed: " + e.getMessage());
+        }
     }
 
     private void loadRewardedAd() {
-        AdRequest request = new AdRequest.Builder().build();
-        RewardedAd.load(this, "ca-app-pub-3940256099942544/5224354917", // Test rewarded ad unit
-            request, new RewardedAdLoadCallback() {
-                @Override
-                public void onAdLoaded(RewardedAd ad) {
-                    rewardedAd = ad;
-                    adLoaded = true;
-                    webView.evaluateJavascript(
-                        "if(typeof window.onRewardedReady === 'function') window.onRewardedReady();", null);
-                }
-
-                @Override
-                public void onAdFailedToLoad(LoadAdError loadAdError) {
-                    adLoaded = false;
-                    webView.evaluateJavascript(
-                        "console.log('Rewarded ad failed to load');", null);
-                }
-            });
+        try {
+            AdRequest request = new AdRequest.Builder().build();
+            RewardedAd.load(this, "ca-app-pub-3940256099942544/5224354917",
+                request, new RewardedAdLoadCallback() {
+                    @Override
+                    public void onAdLoaded(RewardedAd ad) {
+                        rewardedAd = ad;
+                        if (webView != null) {
+                            webView.evaluateJavascript(
+                                "if(typeof window.onRewardedReady === 'function') window.onRewardedReady();", null);
+                        }
+                    }
+                    @Override
+                    public void onAdFailedToLoad(LoadAdError loadAdError) {
+                        Log.w(TAG, "Rewarded ad failed: " + loadAdError.getMessage());
+                    }
+                });
+        } catch (Exception e) {
+            Log.e(TAG, "Rewarded ad load failed: " + e.getMessage());
+        }
     }
 
+    @android.webkit.JavascriptInterface
     public void showRewardedAd() {
-        if (rewardedAd != null) {
-            rewardedAd.show(this, new OnUserEarnedRewardListener() {
-                @Override
-                public void onUserEarnedReward(RewardItem rewardItem) {
-                    webView.evaluateJavascript(
-                        "if(typeof window.onAdReward === 'function') window.onAdReward();", null);
-                }
-            });
-        }
+        runOnUiThread(() -> {
+            if (rewardedAd != null) {
+                rewardedAd.show(MainActivity.this, rewardItem -> {
+                    if (webView != null) {
+                        webView.evaluateJavascript(
+                            "if(typeof window.onAdReward === 'function') window.onAdReward();", null);
+                    }
+                });
+            }
+        });
     }
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
+        if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
             super.onBackPressed();
